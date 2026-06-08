@@ -1,0 +1,97 @@
+import SwiftUI
+
+/// Devices 탭 — 스크린샷 IMG_4261 재현. BLE 센서 스캔·연결 + 실시간 rpm 표시.
+struct DevicesView: View {
+    @EnvironmentObject var bluetooth: BluetoothManager
+
+    var body: some View {
+        NavigationView {
+            List {
+                Section {
+                    ForEach(bluetooth.sensors) { sensor in
+                        sensorRow(sensor)
+                    }
+                    if bluetooth.sensors.isEmpty {
+                        Text(bluetooth.isScanning ? "센서를 찾는 중…" : "스캔을 시작하세요.")
+                            .foregroundColor(.secondary)
+                    }
+                } footer: {
+                    Text("더 알아보기: 표준 BLE 속도·케이던스(CSC)·심박수 센서를 지원합니다.")
+                }
+
+                Section {
+                    NavigationLink {
+                        heartRateSettings
+                    } label: {
+                        Text("Heart Rate Monitor Settings")
+                    }
+                }
+            }
+            .listStyle(.insetGrouped)
+            .navigationTitle("Devices")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(bluetooth.isScanning ? "중지" : "+ / Edit") {
+                        bluetooth.isScanning ? bluetooth.stopScan() : bluetooth.startScan()
+                    }
+                }
+            }
+            .onAppear { if bluetooth.poweredOn { bluetooth.startScan() } }
+        }
+    }
+
+    private func sensorRow(_ s: DiscoveredSensor) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(s.name).font(.system(size: 16, weight: .semibold))
+                Spacer()
+                if s.isConnected {
+                    Image(systemName: "checkmark.circle.fill").foregroundColor(Theme.green)
+                }
+                if let b = s.battery {
+                    Label("\(b)%", systemImage: "battery.50")
+                        .font(.caption).foregroundColor(.secondary)
+                }
+            }
+            Text(s.id.uuidString)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+            // 센서 종류별 실시간 값
+            HStack(spacing: 16) {
+                Text(s.kind.rawValue).font(.caption).foregroundColor(Theme.blue)
+                if let c = s.liveCadenceRPM { Text("Cadence: \(c) rpm").font(.caption).foregroundColor(.secondary) }
+                if let w = s.liveWheelRPM { Text("Wheel Speed: \(w) rpm").font(.caption).foregroundColor(.secondary) }
+            }
+        }
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            s.isConnected ? bluetooth.disconnect(s.id) : bluetooth.connect(s.id)
+        }
+    }
+
+    private var heartRateSettings: some View {
+        List {
+            Section("심박 센서") {
+                ForEach(bluetooth.sensors.filter { $0.kind == .heartRate }) { s in
+                    HStack {
+                        Text(s.name)
+                        Spacer()
+                        if s.isConnected { Image(systemName: "checkmark").foregroundColor(Theme.green) }
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture { s.isConnected ? bluetooth.disconnect(s.id) : bluetooth.connect(s.id) }
+                }
+                if bluetooth.heartRateBPM != nil {
+                    HStack {
+                        Text("현재 심박수")
+                        Spacer()
+                        Text("\(bluetooth.heartRateBPM ?? 0) bpm").foregroundColor(Theme.red)
+                    }
+                }
+            }
+        }
+        .navigationTitle("Heart Rate")
+    }
+}

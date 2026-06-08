@@ -1,0 +1,29 @@
+name: BikeComputer
+options:
+  bundleIdPrefix: com.example.bikecomputer
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+    SWIFT_VERSION: "5.9"
+    TARGETED_DEVICE_FAMILY: "1"
+    GENERATE_INFOPLIST_FILE: NO
+
+targets:
+  BikeComputer:
+    type: application
+    platform: iOS
+    sources:
+      - path: BikeComputer
+    info:
+      path: BikeComputer/App/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.bikecomputer
+        INFOPLIST_FILE: BikeComputer/App/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
