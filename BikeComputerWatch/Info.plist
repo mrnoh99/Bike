@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Bike</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+
+	<!-- 모던 단일 타깃 워치 앱 -->
+	<key>WKApplication</key>
+	<true/>
+	<key>WKCompanionAppBundleIdentifier</key>
+	<string>com.example.bikecomputer</string>
+	<key>WKRunsIndependentlyOfCompanionApp</key>
+	<false/>
+
+	<!-- 백그라운드 워크아웃(심박 계속 측정) -->
+	<key>WKBackgroundModes</key>
+	<array>
+		<string>workout-processing</string>
+	</array>
+
+	<!-- HealthKit 권한 설명 -->
+	<key>NSHealthShareUsageDescription</key>
+	<string>라이딩 중 심박수를 측정하기 위해 건강 데이터를 사용합니다.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>라이딩 운동(워크아웃)을 건강 앱에 기록하기 위해 사용합니다.</string>
+</dict>
+</plist>

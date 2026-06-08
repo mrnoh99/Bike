@@ -3,6 +3,7 @@ import SwiftUI
 /// Devices 탭 — 스크린샷 IMG_4261 재현. BLE 센서 스캔·연결 + 실시간 rpm 표시.
 struct DevicesView: View {
     @EnvironmentObject var bluetooth: BluetoothManager
+    @EnvironmentObject var session: RideSession
 
     var body: some View {
         NavigationView {
@@ -73,7 +74,27 @@ struct DevicesView: View {
 
     private var heartRateSettings: some View {
         List {
-            Section("심박 센서") {
+            Section {
+                HStack {
+                    Label("Apple Watch", systemImage: "applewatch")
+                    Spacer()
+                    Text(session.heartRateManager.watchReachable ? "연결됨" : "대기 중")
+                        .foregroundColor(session.heartRateManager.watchReachable ? Theme.green : .secondary)
+                }
+                if let bpm = session.heartRateManager.heartRateBPM {
+                    HStack {
+                        Text("워치 심박수")
+                        Spacer()
+                        Text("\(bpm) bpm").foregroundColor(Theme.red)
+                    }
+                }
+            } header: {
+                Text("기본 심박 측정")
+            } footer: {
+                Text("라이딩 Start 시 애플워치 앱이 자동 실행되어 심박수를 측정·전송합니다. 워치를 착용하고 폰과 페어링되어 있어야 합니다.")
+            }
+
+            Section("BLE 심박 스트랩 (선택)") {
                 ForEach(bluetooth.sensors.filter { $0.kind == .heartRate }) { s in
                     HStack {
                         Text(s.name)

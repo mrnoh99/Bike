@@ -43,6 +43,10 @@
 	<string>화면이 꺼져 있어도 라이딩 거리·경로를 계속 기록하기 위해 위치를 사용합니다.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>라이딩 활동을 기록하기 위해 모션 데이터를 사용합니다.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>애플워치로 측정한 심박수를 라이딩 화면에 표시하기 위해 사용합니다.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>라이딩 운동(워크아웃)을 건강 앱에 기록하기 위해 사용합니다.</string>
 
 	<!-- 백그라운드에서 센서·위치 계속 기록 -->
 	<key>UIBackgroundModes</key>

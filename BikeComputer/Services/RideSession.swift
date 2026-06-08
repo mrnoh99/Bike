@@ -17,6 +17,7 @@ final class RideSession: ObservableObject {
     let bluetooth = BluetoothManager()
     let location = LocationManager()
     let store = RideStore()
+    let heartRateManager = HeartRateManager()   // 애플워치 심박
 
     // 표시 단위
     @Published var unit: DistanceUnit = .kilometers
@@ -66,6 +67,11 @@ final class RideSession: ObservableObject {
             .sink { [weak self] rpm in self?.ingestCadence(rpm) }
             .store(in: &cancellables)
 
+        // 심박수: 애플워치(주) + BLE 심박 스트랩(보조) 둘 다 수용.
+        heartRateManager.$heartRateBPM
+            .sink { [weak self] bpm in self?.ingestHeartRate(bpm) }
+            .store(in: &cancellables)
+
         bluetooth.$heartRateBPM
             .sink { [weak self] bpm in self?.ingestHeartRate(bpm) }
             .store(in: &cancellables)
@@ -74,12 +80,16 @@ final class RideSession: ObservableObject {
             .sink { [weak self] v in self?.ingestSpeed(v, fromSensor: false) }
             .store(in: &cancellables)
 
-        // 중첩 ObservableObject(기록 저장소) 변경을 상위로 전달해 Routes/More 뷰가 갱신되게 한다.
+        // 중첩 ObservableObject 변경을 상위로 전달해 관련 뷰가 갱신되게 한다.
         store.objectWillChange
+            .sink { [weak self] in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+        heartRateManager.objectWillChange
             .sink { [weak self] in self?.objectWillChange.send() }
             .store(in: &cancellables)
 
         location.requestAuthorization()
+        heartRateManager.requestAuthorization()
     }
 
     // MARK: - 라이딩 제어 (Start / Pause / Done)
@@ -91,6 +101,7 @@ final class RideSession: ObservableObject {
             startedAt = Date()
             bluetooth.resetAccumulators()
             location.startRecording()
+            heartRateManager.startWatchWorkout()   // 워치 심박 측정 시작
             state = .running
         case .paused:
             location.resumeRecording()
@@ -113,6 +124,7 @@ final class RideSession: ObservableObject {
             return
         }
         location.stopRecording()
+        heartRateManager.stopWatchWorkout()   // 워치 심박 측정 종료
 
         let avgSpeed = movingSeconds > 1 ? distanceMeters / movingSeconds : 0
         let avgHR = heartRateSamples.isEmpty ? nil

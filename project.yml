@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: com.example.bikecomputer
   deploymentTarget:
     iOS: "16.0"
+    watchOS: "9.0"
   createIntermediateGroups: true
 
 settings:
@@ -11,10 +12,10 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     DEVELOPMENT_TEAM: ""
     SWIFT_VERSION: "5.9"
-    TARGETED_DEVICE_FAMILY: "1"
     GENERATE_INFOPLIST_FILE: NO
 
 targets:
+  # 아이폰 앱
   BikeComputer:
     type: application
     platform: iOS
@@ -26,4 +27,25 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.bikecomputer
         INFOPLIST_FILE: BikeComputer/App/Info.plist
+        CODE_SIGN_ENTITLEMENTS: BikeComputer/App/BikeComputer.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1"
+    dependencies:
+      - target: BikeComputerWatch
+        embed: true
+
+  # 애플워치 컴패니언 앱 (실시간 심박 측정)
+  BikeComputerWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - path: BikeComputerWatch
+    info:
+      path: BikeComputerWatch/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.bikecomputer.watchkitapp
+        INFOPLIST_FILE: BikeComputerWatch/Info.plist
+        CODE_SIGN_ENTITLEMENTS: BikeComputerWatch/BikeComputerWatch.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "4"

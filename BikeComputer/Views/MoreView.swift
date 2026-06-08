@@ -36,6 +36,12 @@ struct MoreView: View {
                         Text(session.location.authorized ? "허용됨" : "필요")
                             .foregroundColor(session.location.authorized ? Theme.green : Theme.red)
                     }
+                    HStack {
+                        Text("심박 측정")
+                        Spacer()
+                        Text(session.heartRateManager.watchReachable ? "Apple Watch 연결됨" : "Apple Watch")
+                            .foregroundColor(session.heartRateManager.watchReachable ? Theme.green : .secondary)
+                    }
                 }
                 Section {
                     HStack { Text("버전"); Spacer(); Text("1.0").foregroundColor(.secondary) }
