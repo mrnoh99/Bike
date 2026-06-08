@@ -7,7 +7,7 @@ struct BikeComputerApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootTabView()
+            ContentView()
                 .environmentObject(session)
                 .environmentObject(session.bluetooth)
                 .preferredColorScheme(.dark)
