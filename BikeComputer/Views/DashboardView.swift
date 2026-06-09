@@ -67,25 +67,34 @@ struct DashboardView: View {
                            color: Theme.gold, valueSize: 40)
             }
             divider
+            // 심박: 현재 / 평균 / 최대
             row {
-                MetricCell(label: "Heart Rate", value: session.heartRate.map(String.init) ?? "– – –",
-                           unit: "bpm", color: Theme.red, valueSize: 38)
-                MetricCell(label: "Max Heart Rate", value: session.maxHeartRate.map(String.init) ?? "– – –",
-                           unit: "bpm", color: Theme.red, valueSize: 38)
+                MetricCell(label: "HR", value: session.heartRate.map(String.init) ?? "– – –",
+                           unit: "bpm", color: Theme.red, valueSize: 34)
+                MetricCell(label: "Mean HR", value: session.avgHeartRate.map(String.init) ?? "– – –",
+                           unit: "bpm", color: Theme.red, valueSize: 26)
+                MetricCell(label: "Max HR", value: session.maxHeartRate.map(String.init) ?? "– – –",
+                           unit: "bpm", color: Theme.red, valueSize: 26)
             }
             divider
+            // 케이던스: 현재 / 평균 / 최대
             row {
-                MetricCell(label: "Cycle Cadence", value: session.cadence.map(String.init) ?? "– – –",
-                           unit: "rpm", color: Theme.value, valueSize: 38)
+                MetricCell(label: "Cadence", value: session.cadence.map(String.init) ?? "– – –",
+                           unit: "rpm", color: Theme.value, valueSize: 34)
+                MetricCell(label: "Mean Cadence", value: session.avgCadence.map(String.init) ?? "– – –",
+                           unit: "rpm", color: Theme.value, valueSize: 26)
+                MetricCell(label: "Max Cadence", value: session.maxCadence.map(String.init) ?? "– – –",
+                           unit: "rpm", color: Theme.value, valueSize: 26)
+            }
+            divider
+            // 누적 거리 3종을 한 줄에. This Year/Total 은 큰 숫자라 작은 글씨로 표시.
+            row {
                 MetricCell(label: "This Month", value: fmt(session.thisMonthDistance, 0),
-                           unit: session.unit.distanceLabel, color: Theme.purple, valueSize: 38)
-            }
-            divider
-            row {
+                           unit: session.unit.distanceLabel, color: Theme.purple, valueSize: 30)
                 MetricCell(label: "This Year", value: fmt(session.thisYearDistance, 0),
-                           unit: session.unit.distanceLabel, color: Theme.purple, valueSize: 40)
+                           unit: session.unit.distanceLabel, color: Theme.purple, valueSize: 22)
                 MetricCell(label: "Total", value: fmt(session.totalDistance, 0),
-                           unit: session.unit.distanceLabel, color: Theme.purple, valueSize: 40)
+                           unit: session.unit.distanceLabel, color: Theme.purple, valueSize: 22)
             }
         }
         .padding(.horizontal, 8)

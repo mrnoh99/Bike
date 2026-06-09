@@ -53,6 +53,7 @@ final class RideSession: ObservableObject {
     @Published private(set) var maxCadence: Int?
 
     private var heartRateSamples: [Int] = []
+    private var cadenceSamples: [Int] = []
     private var startedAt: Date?
     private var timer: AnyCancellable?
     private var cancellables = Set<AnyCancellable>()
@@ -150,8 +151,6 @@ final class RideSession: ObservableObject {
         watch.stopWatchWorkout()   // 워치 워크아웃 종료(워치가 HKWorkout 저장)
 
         let avgSpeed = movingSeconds > 1 ? distanceMeters / movingSeconds : 0
-        let avgHR = heartRateSamples.isEmpty ? nil
-            : Int((Double(heartRateSamples.reduce(0, +)) / Double(heartRateSamples.count)).rounded())
 
         let record = RideRecord(
             name: routeName,
@@ -162,7 +161,7 @@ final class RideSession: ObservableObject {
             averageSpeedMps: avgSpeed,
             maxSpeedMps: maxSpeedMps,
             maxHeartRate: maxHeartRate,
-            avgHeartRate: avgHR,
+            avgHeartRate: avgHeartRate,
             maxCadence: maxCadence,
             track: location.track
         )
@@ -203,6 +202,18 @@ final class RideSession: ObservableObject {
         let base = health.hasHealthData ? healthMeters : storeMeters
         let inProgress = state == .idle ? 0 : distanceMeters
         return base + inProgress
+    }
+
+    /// 라이딩 중 평균 심박수(bpm). 표시용 누적 평균.
+    var avgHeartRate: Int? {
+        guard !heartRateSamples.isEmpty else { return nil }
+        return Int((Double(heartRateSamples.reduce(0, +)) / Double(heartRateSamples.count)).rounded())
+    }
+
+    /// 라이딩 중 평균 케이던스(rpm). 표시용 누적 평균.
+    var avgCadence: Int? {
+        guard !cadenceSamples.isEmpty else { return nil }
+        return Int((Double(cadenceSamples.reduce(0, +)) / Double(cadenceSamples.count)).rounded())
     }
 
     // MARK: - 내부
@@ -255,6 +266,7 @@ final class RideSession: ObservableObject {
         cadence = rpm
         if let rpm, rpm > 0 {
             maxCadence = max(maxCadence ?? 0, rpm)
+            if state == .running { cadenceSamples.append(rpm) }
         }
     }
 
@@ -276,6 +288,7 @@ final class RideSession: ObservableObject {
         maxHeartRate = nil
         maxCadence = nil
         heartRateSamples = []
+        cadenceSamples = []
     }
 }
 
@@ -305,8 +318,10 @@ extension RideSession {
         s.movingSeconds = 1_780
         s.heartRate = 148
         s.maxHeartRate = 165
+        s.heartRateSamples = [138, 142, 145, 148, 150, 147]   // 평균 ≈ 145
         s.cadence = 88
         s.maxCadence = 97
+        s.cadenceSamples = [80, 84, 86, 88, 90, 87]           // 평균 ≈ 86
         return s
     }
 }
