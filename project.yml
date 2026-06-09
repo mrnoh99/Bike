@@ -2,8 +2,8 @@ name: BikeComputer
 options:
   bundleIdPrefix: com.example.bikecomputer
   deploymentTarget:
-    iOS: "17.0"
-    watchOS: "10.0"
+    iOS: "26.0"
+    watchOS: "26.0"
   createIntermediateGroups: true
 
 settings:

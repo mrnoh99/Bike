@@ -4,7 +4,7 @@
 속도·케이던스·심박수를 측정한다(워치 미사용 시 폰의 BLE 센서로 폴백). 라이딩은 **Apple 건강(HealthKit)**
 앱에 운동으로 기록되며, 누적 거리는 건강 데이터 기준으로 집계한다. Cyclemeter 스타일의 대시보드 UI를 SwiftUI 로 구현했다.
 
-> **최소 OS: iOS 17 / watchOS 10** (워치 HealthKit `cyclingSpeed`·`cyclingCadence` 요구사항).
+> **최소 OS: iOS 26 / watchOS 26** (워치 HealthKit `cyclingSpeed`·`cyclingCadence` 요구사항).
 
 ## 화면 (하단 탭)
 
