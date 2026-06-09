@@ -17,7 +17,7 @@ struct DevicesView: View {
                             .foregroundColor(.secondary)
                     }
                 } footer: {
-                    Text("더 알아보기: 표준 BLE 속도·케이던스(CSC)·심박수 센서를 지원합니다.")
+                    Text("속도·케이던스 센서는 애플워치 설정 > 블루투스에서 페어링하면 워치를 통해 측정됩니다. 아래 폰 BLE 센서 목록은 워치를 쓰지 않을 때의 폴백입니다(표준 CSC 0x1816·심박 0x180D).")
                 }
 
                 Section {
@@ -78,10 +78,10 @@ struct DevicesView: View {
                 HStack {
                     Label("Apple Watch", systemImage: "applewatch")
                     Spacer()
-                    Text(session.heartRateManager.watchReachable ? "연결됨" : "대기 중")
-                        .foregroundColor(session.heartRateManager.watchReachable ? Theme.green : .secondary)
+                    Text(session.watch.watchReachable ? "연결됨" : "대기 중")
+                        .foregroundColor(session.watch.watchReachable ? Theme.green : .secondary)
                 }
-                if let bpm = session.heartRateManager.heartRateBPM {
+                if let bpm = session.watch.heartRateBPM {
                     HStack {
                         Text("워치 심박수")
                         Spacer()
@@ -115,4 +115,12 @@ struct DevicesView: View {
         }
         .navigationTitle("Heart Rate")
     }
+}
+
+#Preview {
+    let session = RideSession.preview
+    return DevicesView()
+        .environmentObject(session.bluetooth)
+        .environmentObject(session)
+        .preferredColorScheme(.dark)
 }

@@ -39,14 +39,26 @@ struct MoreView: View {
                     HStack {
                         Text("심박 측정")
                         Spacer()
-                        Text(session.heartRateManager.watchReachable ? "Apple Watch 연결됨" : "Apple Watch")
-                            .foregroundColor(session.heartRateManager.watchReachable ? Theme.green : .secondary)
+                        Text(session.watch.watchReachable ? "Apple Watch 연결됨" : "Apple Watch")
+                            .foregroundColor(session.watch.watchReachable ? Theme.green : .secondary)
+                    }
+                    HStack {
+                        Text("워치 속도")
+                        Spacer()
+                        Text(session.watch.watchSpeedMps.map { String(format: "%.1f %@", session.unit.speed(fromMetersPerSecond: $0), session.unit.speedLabel) } ?? "수신 대기")
+                            .foregroundColor(session.watch.watchSpeedMps != nil ? Theme.green : .secondary)
+                    }
+                    HStack {
+                        Text("워치 케이던스")
+                        Spacer()
+                        Text(session.watch.watchCadenceRPM.map { "\($0) rpm" } ?? "수신 대기")
+                            .foregroundColor(session.watch.watchCadenceRPM != nil ? Theme.green : .secondary)
                     }
                 }
                 Section {
                     HStack { Text("버전"); Spacer(); Text("1.0").foregroundColor(.secondary) }
                 } footer: {
-                    Text("표준 BLE 속도·케이던스(CSC, 0x1816)·심박수(0x180D) 센서와 GPS 를 사용합니다.")
+                    Text("속도·케이던스는 애플워치에 페어링한 BLE 센서(워치 설정 > 블루투스)를 통해 받고, 워치가 없을 때만 폰이 직접 BLE(CSC, 0x1816)·GPS 로 측정합니다. 라이딩은 Apple 건강 앱에 운동으로 기록되며 누적 거리는 건강 데이터 기준입니다.")
                 }
             }
             .navigationTitle("More")
@@ -60,4 +72,12 @@ struct MoreView: View {
             Text(String(format: "%.0f %@", value, session.unit.distanceLabel)).foregroundColor(Theme.purple)
         }
     }
+}
+
+#Preview {
+    let session = RideSession.preview
+    return MoreView()
+        .environmentObject(session)
+        .environmentObject(session.bluetooth)
+        .preferredColorScheme(.dark)
 }

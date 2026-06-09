@@ -204,3 +204,11 @@ private extension String {
     /// "HH:mm:ss" → "HH:mm" (스크린샷의 시계 표기)
     var prefix5: String { String(prefix(5)) }
 }
+
+#Preview {
+    let session = RideSession.preview
+    return DashboardView()
+        .environmentObject(session)
+        .environmentObject(session.bluetooth)
+        .preferredColorScheme(.dark)
+}

@@ -2,8 +2,9 @@ import Foundation
 import HealthKit
 import WatchConnectivity
 
-/// 워치에서 사이클링 워크아웃 세션을 돌려 실시간 심박수를 수집하고,
-/// `WCSession` 으로 아이폰에 bpm 을 전송한다.
+/// 워치에서 사이클링 워크아웃 세션을 돌려 실시간 심박수·속도·케이던스를 수집하고,
+/// `WCSession` 으로 아이폰에 전송한다. 속도·케이던스 BLE 센서는 워치 *설정 > 블루투스*
+/// 에서 OS 에 페어링하면 HealthKit(`cyclingSpeed`/`cyclingCadence`)으로 들어온다.
 final class WorkoutManager: NSObject, ObservableObject {
     static let shared = WorkoutManager()
 
@@ -31,7 +32,10 @@ final class WorkoutManager: NSObject, ObservableObject {
         guard HKHealthStore.isHealthDataAvailable() else { return }
         var read: Set<HKObjectType> = [HKObjectType.workoutType()]
         var share: Set<HKSampleType> = [HKObjectType.workoutType()]
-        for id in [HKQuantityTypeIdentifier.heartRate, .activeEnergyBurned, .distanceCycling] {
+        // 사이클링 속도·케이던스는 워치 설정에서 페어링한 BLE 센서를 OS 가 기록한다(watchOS 10+).
+        let ids: [HKQuantityTypeIdentifier] = [.heartRate, .activeEnergyBurned, .distanceCycling,
+                                               .cyclingSpeed, .cyclingCadence]
+        for id in ids {
             if let t = HKQuantityType.quantityType(forIdentifier: id) {
                 read.insert(t); share.insert(t)
             }
@@ -52,7 +56,14 @@ final class WorkoutManager: NSObject, ObservableObject {
         do {
             let s = try HKWorkoutSession(healthStore: healthStore, configuration: config)
             let b = s.associatedWorkoutBuilder()
-            b.dataSource = HKLiveWorkoutDataSource(healthStore: healthStore, workoutConfiguration: config)
+            let dataSource = HKLiveWorkoutDataSource(healthStore: healthStore, workoutConfiguration: config)
+            // 기본 수집(심박·거리·에너지) 외에 사이클링 속도·케이던스도 수집 활성화.
+            for id in [HKQuantityTypeIdentifier.cyclingSpeed, .cyclingCadence] {
+                if let t = HKQuantityType.quantityType(forIdentifier: id) {
+                    dataSource.enableCollection(for: t, predicate: nil)
+                }
+            }
+            b.dataSource = dataSource
             s.delegate = self
             b.delegate = self
             session = s
@@ -80,13 +91,15 @@ final class WorkoutManager: NSObject, ObservableObject {
         }
     }
 
-    private func sendHeartRate(_ bpm: Int) {
+    /// 갱신된 센서 값(hr/speedMps/cadence 중 일부)을 폰으로 전송.
+    private func send(_ payload: [String: Any]) {
+        guard !payload.isEmpty else { return }
         let s = WCSession.default
         guard s.activationState == .activated else { return }
         if s.isReachable {
-            s.sendMessage(["hr": bpm], replyHandler: nil, errorHandler: nil)
+            s.sendMessage(payload, replyHandler: nil, errorHandler: nil)
         } else {
-            try? s.updateApplicationContext(["hr": bpm])
+            try? s.updateApplicationContext(payload)
         }
     }
 }
@@ -112,16 +125,32 @@ extension WorkoutManager: HKLiveWorkoutBuilderDelegate {
 
     func workoutBuilder(_ workoutBuilder: HKLiveWorkoutBuilder,
                         didCollectDataOf collectedTypes: Set<HKSampleType>) {
-        guard let hrType = HKQuantityType.quantityType(forIdentifier: .heartRate),
-              collectedTypes.contains(hrType),
-              let stats = workoutBuilder.statistics(for: hrType),
-              let quantity = stats.mostRecentQuantity() else { return }
+        var payload: [String: Any] = [:]
 
-        let unit = HKUnit.count().unitDivided(by: .minute())
-        let bpm = Int(quantity.doubleValue(for: unit).rounded())
-        guard bpm > 0 else { return }
-        DispatchQueue.main.async { self.heartRate = bpm }
-        sendHeartRate(bpm)
+        // 심박수 (count/min)
+        if let hrType = HKQuantityType.quantityType(forIdentifier: .heartRate),
+           collectedTypes.contains(hrType),
+           let q = workoutBuilder.statistics(for: hrType)?.mostRecentQuantity() {
+            let bpm = Int(q.doubleValue(for: .count().unitDivided(by: .minute())).rounded())
+            if bpm > 0 {
+                payload["hr"] = bpm
+                DispatchQueue.main.async { self.heartRate = bpm }
+            }
+        }
+
+        // 사이클링 속도 (m/s) · 케이던스 (rpm) — 워치 설정에서 페어링한 센서값(watchOS 10+).
+        if let spType = HKQuantityType.quantityType(forIdentifier: .cyclingSpeed),
+           collectedTypes.contains(spType),
+           let q = workoutBuilder.statistics(for: spType)?.mostRecentQuantity() {
+            payload["speedMps"] = q.doubleValue(for: .meter().unitDivided(by: .second()))
+        }
+        if let cadType = HKQuantityType.quantityType(forIdentifier: .cyclingCadence),
+           collectedTypes.contains(cadType),
+           let q = workoutBuilder.statistics(for: cadType)?.mostRecentQuantity() {
+            payload["cadence"] = Int(q.doubleValue(for: .count().unitDivided(by: .minute())).rounded())
+        }
+
+        send(payload)
     }
 }
 

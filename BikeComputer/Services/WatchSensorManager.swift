@@ -2,13 +2,22 @@ import Foundation
 import HealthKit
 import WatchConnectivity
 
-/// 애플워치에서 측정한 실시간 심박수를 받는다.
+/// 애플워치에서 측정한 실시간 센서값(심박수·속도·케이던스)을 받는다.
 /// - 라이딩 시작 시 `startWatchApp(toHandle:)` 로 워치의 사이클링 워크아웃을 띄우고,
-/// - 워치 앱이 `WCSession` 으로 보내는 bpm 을 받아 발행한다.
-final class HeartRateManager: NSObject, ObservableObject {
+/// - 워치 앱이 `WCSession` 으로 보내는 값(`hr`/`speedMps`/`cadence`)을 받아 발행한다.
+///
+/// 속도·케이던스 BLE 센서는 워치 *설정 > 블루투스* 에서 OS 에 페어링하면
+/// 워치 워크아웃의 HealthKit(`cyclingSpeed`/`cyclingCadence`)으로 들어오고, 그 값을 폰에 중계한다.
+final class WatchSensorManager: NSObject, ObservableObject {
     @Published private(set) var heartRateBPM: Int?
+    @Published private(set) var watchSpeedMps: Double?
+    @Published private(set) var watchCadenceRPM: Int?
     @Published private(set) var watchReachable = false
     @Published private(set) var authorized = false
+
+    /// 이번 라이딩에서 워치로부터 데이터를 한 번이라도 받았는지.
+    /// (false 이면 폰 단독 라이딩으로 보고 폰이 HealthKit 워크아웃을 저장한다.)
+    private(set) var didReceiveWatchDataThisRide = false
 
     private let healthStore = HKHealthStore()
 
@@ -24,18 +33,28 @@ final class HeartRateManager: NSObject, ObservableObject {
         s.activate()
     }
 
-    /// HealthKit 권한 요청(심박 읽기 + 워크아웃 공유). 워치 앱을 띄우려면 폰도 권한이 필요하다.
+    /// HealthKit 권한 요청(심박·사이클링 거리 읽기 + 워크아웃·거리 공유).
+    /// 워치 앱을 띄우려면, 그리고 폰 단독 라이딩을 건강 앱에 저장하려면 폰도 권한이 필요하다.
     func requestAuthorization() {
-        guard HKHealthStore.isHealthDataAvailable(),
-              let hr = HKObjectType.quantityType(forIdentifier: .heartRate) else { return }
+        guard HKHealthStore.isHealthDataAvailable() else { return }
         let workout = HKObjectType.workoutType()
-        healthStore.requestAuthorization(toShare: [workout], read: [hr, workout]) { [weak self] ok, _ in
+        var read: Set<HKObjectType> = [workout]
+        var share: Set<HKSampleType> = [workout]
+        for id in [HKQuantityTypeIdentifier.heartRate, .distanceCycling] {
+            if let t = HKQuantityType.quantityType(forIdentifier: id) {
+                read.insert(t); share.insert(t)
+            }
+        }
+        healthStore.requestAuthorization(toShare: share, read: read) { [weak self] ok, _ in
             DispatchQueue.main.async { self?.authorized = ok }
         }
     }
 
     /// 라이딩 시작: 워치 앱을 실행해 사이클링 워크아웃을 시작시킨다.
     func startWatchWorkout() {
+        didReceiveWatchDataThisRide = false
+        watchSpeedMps = nil
+        watchCadenceRPM = nil
         guard HKHealthStore.isHealthDataAvailable() else { return }
         let config = HKWorkoutConfiguration()
         config.activityType = .cycling
@@ -47,6 +66,8 @@ final class HeartRateManager: NSObject, ObservableObject {
     /// 라이딩 종료: 워치 워크아웃을 멈춘다.
     func stopWatchWorkout() {
         heartRateBPM = nil
+        watchSpeedMps = nil
+        watchCadenceRPM = nil
         send(["command": "stop"])
     }
 
@@ -61,12 +82,25 @@ final class HeartRateManager: NSObject, ObservableObject {
     }
 
     private func handle(_ message: [String: Any]) {
-        guard let hr = message["hr"] as? Int else { return }
-        DispatchQueue.main.async { self.heartRateBPM = hr > 0 ? hr : nil }
+        // 명령 에코 등 센서값이 없는 메시지는 무시.
+        let hasSensorData = message["hr"] != nil || message["speedMps"] != nil || message["cadence"] != nil
+        guard hasSensorData else { return }
+        DispatchQueue.main.async {
+            self.didReceiveWatchDataThisRide = true
+            if let hr = message["hr"] as? Int {
+                self.heartRateBPM = hr > 0 ? hr : nil
+            }
+            if let v = message["speedMps"] as? Double {
+                self.watchSpeedMps = v >= 0 ? v : nil
+            }
+            if let rpm = message["cadence"] as? Int {
+                self.watchCadenceRPM = rpm >= 0 ? rpm : nil
+            }
+        }
     }
 }
 
-extension HeartRateManager: WCSessionDelegate {
+extension WatchSensorManager: WCSessionDelegate {
     func session(_ session: WCSession, activationDidCompleteWith state: WCSessionActivationState, error: Error?) {
         DispatchQueue.main.async { self.watchReachable = session.isReachable }
     }
