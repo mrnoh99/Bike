@@ -243,7 +243,7 @@ final class RideSession: ObservableObject {
     }
 
     private func makeRecord(startedAt started: Date) -> RideRecord {
-        let avgSpeed = movingSeconds > 1 ? distanceMeters / movingSeconds : 0
+        let avgSpeed = rideSeconds > 1 ? distanceMeters / rideSeconds : 0   // 라이딩 시간 기준
         return RideRecord(
             name: routeName,
             startedAt: started,
@@ -294,8 +294,8 @@ final class RideSession: ObservableObject {
     var displaySpeed: Double { unit.speed(fromMetersPerSecond: currentSpeedMps) }
     var displayMaxSpeed: Double { unit.speed(fromMetersPerSecond: maxSpeedMps) }
     var displayAverageSpeed: Double {
-        guard movingSeconds > 1 else { return 0 }
-        return unit.speed(fromMetersPerSecond: distanceMeters / movingSeconds)
+        guard rideSeconds > 1 else { return 0 }
+        return unit.speed(fromMetersPerSecond: distanceMeters / rideSeconds)
     }
     // 누적 거리: Apple Health 기준(권한 허용 시), 미인증 시 로컬 기록으로 폴백.
     // 진행 중 라이딩은 아직 Health 미저장이므로 현재 거리(distanceMeters)를 더해 실시간 표시.
