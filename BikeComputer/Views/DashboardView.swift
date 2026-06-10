@@ -168,6 +168,9 @@ struct DashboardView: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(Theme.label)
             Spacer()
+            Text("Designed by Jaisung NOH MD 2026")
+                .font(.system(size: 9))
+                .foregroundColor(Theme.label)
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 4)

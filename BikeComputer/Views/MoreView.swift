@@ -57,6 +57,7 @@ struct MoreView: View {
                 }
                 Section {
                     HStack { Text("버전"); Spacer(); Text("1.0").foregroundColor(.secondary) }
+                    HStack { Text("디자인"); Spacer(); Text("Designed by Jaisung NOH MD 2026").foregroundColor(.secondary) }
                 } footer: {
                     Text("속도·케이던스는 애플워치에 페어링한 BLE 센서(워치 설정 > 블루투스)를 통해 받고, 워치가 없을 때만 폰이 직접 BLE(CSC, 0x1816)·GPS 로 측정합니다. 라이딩은 Apple 건강 앱에 운동으로 기록되며 누적 거리는 건강 데이터 기준입니다.")
                 }

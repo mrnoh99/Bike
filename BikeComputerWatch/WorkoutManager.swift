@@ -11,9 +11,15 @@ final class WorkoutManager: NSObject, ObservableObject {
     @Published var heartRate: Int = 0
     @Published var isRunning = false
 
+    /// 최근 산소포화도(%). 휴식 중 'SpO2 측정' 버튼으로 포착한 값.
+    @Published var spo2: Int = 0
+    /// SpO2 측정 대기(새 샘플 포착) 중인지.
+    @Published var measuringSpO2 = false
+
     private let healthStore = HKHealthStore()
     private var session: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
+    private var spo2Query: HKQuery?
 
     override init() {
         super.init()
@@ -40,7 +46,67 @@ final class WorkoutManager: NSObject, ObservableObject {
                 read.insert(t); share.insert(t)
             }
         }
+        // 산소포화도는 읽기 전용(센서 트리거는 시스템 '혈중 산소' 앱/자동측정만 가능).
+        if let spo2 = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation) {
+            read.insert(spo2)
+        }
         healthStore.requestAuthorization(toShare: share, read: read) { _, _ in }
+    }
+
+    // MARK: - 산소포화도(SpO2) 포착
+
+    /// '측정' 버튼: 탭 이후 들어오는 새 SpO2 샘플을 포착해 폰으로 전송한다.
+    /// 직접 센서를 켤 수는 없으므로, 사용자가 '혈중 산소' 앱에서 측정하거나
+    /// watchOS 자동측정이 잡히면 그 값을 포착한다(60초 대기 후 자동 종료).
+    func measureSpO2() {
+        guard !measuringSpO2,
+              let type = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation) else { return }
+        DispatchQueue.main.async { self.measuringSpO2 = true }
+
+        fetchLatestSpO2()   // 대기 중 직전 최근값 우선 표시
+
+        let tap = Date()
+        let pred = HKQuery.predicateForSamples(withStart: tap, end: nil, options: .strictStartDate)
+        let q = HKAnchoredObjectQuery(type: type, predicate: pred, anchor: nil,
+                                      limit: HKObjectQueryNoLimit) { [weak self] _, samples, _, _, _ in
+            self?.handleSpO2(samples, finishMeasuring: true)
+        }
+        q.updateHandler = { [weak self] _, samples, _, _, _ in
+            self?.handleSpO2(samples, finishMeasuring: true)
+        }
+        healthStore.execute(q)
+        spo2Query = q
+
+        // 타임아웃: 60초 내 새 측정이 없으면 대기 종료.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 60) { [weak self] in
+            self?.stopMeasuringSpO2()
+        }
+    }
+
+    private func fetchLatestSpO2() {
+        guard let type = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation) else { return }
+        let sort = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
+        let q = HKSampleQuery(sampleType: type, predicate: nil, limit: 1, sortDescriptors: [sort]) { [weak self] _, samples, _ in
+            self?.handleSpO2(samples, finishMeasuring: false)
+        }
+        healthStore.execute(q)
+    }
+
+    private func handleSpO2(_ samples: [HKSample]?, finishMeasuring: Bool) {
+        guard let s = samples?.compactMap({ $0 as? HKQuantitySample })
+            .max(by: { $0.endDate < $1.endDate }) else { return }
+        let pct = s.quantity.doubleValue(for: .percent())   // 0~1
+        DispatchQueue.main.async {
+            self.spo2 = Int((pct * 100).rounded())
+            if finishMeasuring { self.measuringSpO2 = false }
+        }
+        send(["spo2": pct, "spo2Date": s.endDate.timeIntervalSince1970])
+        if finishMeasuring { stopMeasuringSpO2() }
+    }
+
+    private func stopMeasuringSpO2() {
+        if let q = spo2Query { healthStore.stop(q); spo2Query = nil }
+        DispatchQueue.main.async { self.measuringSpO2 = false }
     }
 
     /// 워크아웃 시작(아이폰의 startWatchApp 또는 워치 화면의 시작 버튼에서 호출).

@@ -15,6 +15,10 @@ final class WatchSensorManager: NSObject, ObservableObject {
     @Published private(set) var watchReachable = false
     @Published private(set) var authorized = false
 
+    /// 워치 'SpO2 측정' 버튼으로 포착해 보낸 산소포화도(0~1)와 측정 시각.
+    @Published private(set) var spo2: Double?
+    @Published private(set) var spo2Date: Date?
+
     /// 이번 라이딩에서 워치로부터 데이터를 한 번이라도 받았는지.
     /// (false 이면 폰 단독 라이딩으로 보고 폰이 HealthKit 워크아웃을 저장한다.)
     private(set) var didReceiveWatchDataThisRide = false
@@ -86,6 +90,17 @@ final class WatchSensorManager: NSObject, ObservableObject {
     }
 
     private func handle(_ message: [String: Any]) {
+        // SpO2 측정값(워치 버튼) — 별도 처리(센서 스트림과 무관하게 도착).
+        if let v = message["spo2"] as? Double {
+            DispatchQueue.main.async {
+                self.spo2 = v
+                if let t = message["spo2Date"] as? Double {
+                    self.spo2Date = Date(timeIntervalSince1970: t)
+                } else {
+                    self.spo2Date = Date()
+                }
+            }
+        }
         // 명령 에코 등 센서값이 없는 메시지는 무시.
         let hasSensorData = message["hr"] != nil || message["speedMps"] != nil || message["cadence"] != nil
         guard hasSensorData else { return }

@@ -216,14 +216,27 @@ final class RideSession: ObservableObject {
         return Int((Double(cadenceSamples.reduce(0, +)) / Double(cadenceSamples.count)).rounded())
     }
 
-    /// 최근 산소포화도(%). 워치가 백그라운드로 기록한 값(실시간 연속 측정 아님).
+    /// 최근 산소포화도 — 워치 'SpO2 측정' 버튼 값과 HealthKit 최근값 중 더 최신을 선택.
+    /// (워치 버튼은 WCSession 으로 즉시 도착, HealthKit 은 동기화가 늦을 수 있음.)
+    private var bestSpO2: (pct: Double, date: Date)? {
+        let h: (Double, Date)? = health.latestSpO2.flatMap { v in health.latestSpO2Date.map { (v, $0) } }
+        let w: (Double, Date)? = watch.spo2.flatMap { v in watch.spo2Date.map { (v, $0) } }
+        switch (h, w) {
+        case let (.some(a), .some(b)): return b.1 >= a.1 ? b : a
+        case let (.some(a), nil): return a
+        case let (nil, .some(b)): return b
+        default: return nil
+        }
+    }
+
+    /// 최근 산소포화도(%).
     var spo2Percent: Int? {
-        health.latestSpO2.map { Int(($0 * 100).rounded()) }
+        bestSpO2.map { Int(($0.pct * 100).rounded()) }
     }
 
     /// 최근 SpO2 측정 경과 시간 표시("방금"/"12분 전"/"2시간 전"/"3일 전").
     var spo2AgeText: String? {
-        guard let d = health.latestSpO2Date else { return nil }
+        guard let d = bestSpO2?.date else { return nil }
         let s = Date().timeIntervalSince(d)
         if s < 60 { return "방금" }
         if s < 3600 { return "\(Int(s / 60))분 전" }
