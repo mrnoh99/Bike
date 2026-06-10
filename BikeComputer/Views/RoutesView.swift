@@ -1,50 +1,209 @@
 import SwiftUI
 import MapKit
 
-/// Routes 탭 — 저장된 라이딩 기록 목록 + 상세.
-struct RoutesView: View {
-    @EnvironmentObject var session: RideSession
+/// 라이딩 목록 정렬 기준.
+enum RideSort: String, CaseIterable, Identifiable {
+    case newest = "최신순"
+    case oldest = "오래된순"
+    case distance = "거리순"
+    case duration = "시간순"
+    var id: String { rawValue }
 
-    private let dateFormatter: DateFormatter = {
-        let f = DateFormatter(); f.dateFormat = "yyyy.MM.dd HH:mm"; return f
-    }()
-
-    var body: some View {
-        NavigationView {
-            List {
-                if session.store.records.isEmpty {
-                    Text("아직 저장된 라이딩이 없습니다.\nStopwatch 에서 Start 후 Done 을 누르면 기록됩니다.")
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                ForEach(session.store.records) { record in
-                    NavigationLink {
-                        RideDetailView(record: record, unit: session.unit)
-                    } label: {
-                        row(record)
-                    }
-                }
-                .onDelete { idx in
-                    idx.map { session.store.records[$0] }.forEach { session.store.delete($0) }
-                }
-            }
-            .navigationTitle("Routes")
+    func sorted(_ records: [RideRecord]) -> [RideRecord] {
+        switch self {
+        case .newest:   return records.sorted { $0.startedAt > $1.startedAt }
+        case .oldest:   return records.sorted { $0.startedAt < $1.startedAt }
+        case .distance: return records.sorted { $0.distanceMeters > $1.distanceMeters }
+        case .duration: return records.sorted { $0.duration > $1.duration }
         }
     }
+}
 
-    private func row(_ r: RideRecord) -> some View {
+private let routeDateFormatter: DateFormatter = {
+    let f = DateFormatter(); f.dateFormat = "yyyy.MM.dd HH:mm"; return f
+}()
+
+/// 목록 행(이름·거리·시간·날짜).
+struct RideRow: View {
+    let record: RideRecord
+    let unit: DistanceUnit
+    var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(r.name).font(.system(size: 16, weight: .semibold))
+            Text(record.name).font(.system(size: 16, weight: .semibold))
             HStack(spacing: 14) {
-                Label(String(format: "%.2f %@", session.unit.distance(fromMeters: r.distanceMeters), session.unit.distanceLabel),
+                Label(String(format: "%.2f %@", unit.distance(fromMeters: record.distanceMeters), unit.distanceLabel),
                       systemImage: "ruler")
-                Label(formatDuration(r.duration), systemImage: "clock")
+                Label(formatDuration(record.duration), systemImage: "clock")
             }
             .font(.caption).foregroundColor(.secondary)
-            Text(dateFormatter.string(from: r.startedAt))
+            Text(routeDateFormatter.string(from: record.startedAt))
                 .font(.caption2).foregroundColor(.secondary)
         }
         .padding(.vertical, 2)
+    }
+}
+
+/// Routes 탭 — 저장된 라이딩 목록(정렬 변경 + 코스별 묶어보기) + 상세.
+struct RoutesView: View {
+    @EnvironmentObject var session: RideSession
+    @State private var sort: RideSort = .newest
+    @State private var grouped = false
+
+    var body: some View {
+        NavigationView {
+            Group {
+                if session.store.records.isEmpty {
+                    emptyState
+                } else if grouped {
+                    groupedList
+                } else {
+                    flatList
+                }
+            }
+            .navigationTitle("Routes")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Menu {
+                        Picker("정렬", selection: $sort) {
+                            ForEach(RideSort.allCases) { Text($0.rawValue).tag($0) }
+                        }
+                        Divider()
+                        Toggle("코스별 보기", isOn: $grouped)
+                    } label: {
+                        Image(systemName: "line.3.horizontal.decrease.circle")
+                    }
+                }
+            }
+        }
+    }
+
+    private var emptyState: some View {
+        List {
+            Text("아직 저장된 라이딩이 없습니다.\nStopwatch 에서 Start 후 Done 을 누르면 기록됩니다.")
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    // 평면 목록(정렬 적용)
+    private var flatList: some View {
+        let records = sort.sorted(session.store.records)
+        return List {
+            ForEach(records) { record in
+                NavigationLink {
+                    RideDetailView(record: record, unit: session.unit)
+                } label: {
+                    RideRow(record: record, unit: session.unit)
+                }
+            }
+            .onDelete { idx in
+                idx.map { records[$0] }.forEach { session.store.delete($0) }
+            }
+        }
+    }
+
+    // 코스별 묶음(시작/끝 GPS + 거리로 분류)
+    private var groupedList: some View {
+        List {
+            ForEach(RouteGrouping.groups(session.store.records)) { group in
+                NavigationLink {
+                    RouteGroupView(group: group, sort: sort)
+                } label: {
+                    groupRow(group)
+                }
+            }
+        }
+    }
+
+    private func groupRow(_ g: RouteGroup) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(g.title).font(.system(size: 16, weight: .semibold))
+                Spacer()
+                Text("\(g.rides.count)회")
+                    .font(.caption).foregroundColor(.secondary)
+            }
+            HStack(spacing: 14) {
+                Label(String(format: "평균 %.1f km", g.averageMeters / 1000), systemImage: "ruler")
+                Label(String(format: "합계 %.0f km", g.totalMeters / 1000), systemImage: "sum")
+            }
+            .font(.caption).foregroundColor(.secondary)
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+/// 한 코스에 묶인 라이딩 목록.
+struct RouteGroupView: View {
+    @EnvironmentObject var session: RideSession
+    let group: RouteGroup
+    let sort: RideSort
+
+    var body: some View {
+        List {
+            ForEach(sort.sorted(group.rides)) { record in
+                NavigationLink {
+                    RideDetailView(record: record, unit: session.unit)
+                } label: {
+                    RideRow(record: record, unit: session.unit)
+                }
+            }
+            .onDelete { idx in
+                let arr = sort.sorted(group.rides)
+                idx.map { arr[$0] }.forEach { session.store.delete($0) }
+            }
+        }
+        .navigationTitle(group.title)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// MARK: - 코스 분류 (시작 GPS + 끝 GPS + 거리)
+
+struct RouteGroup: Identifiable {
+    let id: String
+    var title: String
+    var rides: [RideRecord]
+    var totalMeters: Double { rides.reduce(0) { $0 + $1.distanceMeters } }
+    var averageMeters: Double { rides.isEmpty ? 0 : totalMeters / Double(rides.count) }
+}
+
+enum RouteGrouping {
+    /// 시작 좌표(≈110m)·끝 좌표(≈110m)·거리(1km 버킷)가 같으면 같은 코스로 본다.
+    static func groups(_ records: [RideRecord]) -> [RouteGroup] {
+        var buckets: [String: [RideRecord]] = [:]
+        var noGPS: [RideRecord] = []
+        for r in records {
+            if let key = signature(r) {
+                buckets[key, default: []].append(r)
+            } else {
+                noGPS.append(r)
+            }
+        }
+        var result = buckets.map { key, rides -> RouteGroup in
+            RouteGroup(id: key, title: title(for: rides), rides: rides)
+        }
+        // 자주 탄 코스 먼저.
+        result.sort { $0.rides.count > $1.rides.count }
+        if !noGPS.isEmpty {
+            result.append(RouteGroup(id: "no-gps", title: "경로 없음", rides: noGPS))
+        }
+        return result
+    }
+
+    private static func signature(_ r: RideRecord) -> String? {
+        guard let s = r.track.first, let e = r.track.last else { return nil }
+        let sk = String(format: "%.3f,%.3f", s.lat, s.lon)
+        let ek = String(format: "%.3f,%.3f", e.lat, e.lon)
+        let dk = Int((r.distanceMeters / 1000).rounded())
+        return "\(sk)|\(ek)|\(dk)km"
+    }
+
+    /// 그룹 제목 = 가장 많이 쓰인 라이딩 이름.
+    private static func title(for rides: [RideRecord]) -> String {
+        var counts: [String: Int] = [:]
+        for r in rides { counts[r.name, default: 0] += 1 }
+        return counts.max { $0.value < $1.value }?.key ?? "코스"
     }
 }
 
