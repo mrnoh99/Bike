@@ -313,6 +313,11 @@ struct DashboardView: View {
                     }
                     TextField("직접 입력", text: $session.bikeName)
                 }
+                Section("자동 일시정지") {
+                    Toggle("바퀴 멈추면 자동 일시정지", isOn: $session.autoPauseEnabled)
+                    Text("정지 시 약 3초 후 자동으로 일시정지되고, 다시 구르면 자동 재개됩니다.")
+                        .font(.caption).foregroundColor(.secondary)
+                }
                 Section("속도 센서") {
                     HStack {
                         Text("휠 둘레")
