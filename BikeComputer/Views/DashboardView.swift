@@ -71,9 +71,9 @@ struct DashboardView: View {
             row {
                 MetricCell(label: "HR", value: session.heartRate.map(String.init) ?? "– – –",
                            unit: "bpm", color: Theme.red, valueSize: 34)
-                MetricCell(label: "Mean HR", value: session.avgHeartRate.map(String.init) ?? "– – –",
+                MetricCell(label: "Mean", value: session.avgHeartRate.map(String.init) ?? "– – –",
                            unit: "bpm", color: Theme.red, valueSize: 26)
-                MetricCell(label: "Max HR", value: session.maxHeartRate.map(String.init) ?? "– – –",
+                MetricCell(label: "Max", value: session.maxHeartRate.map(String.init) ?? "– – –",
                            unit: "bpm", color: Theme.red, valueSize: 26)
             }
             divider
@@ -81,9 +81,9 @@ struct DashboardView: View {
             row {
                 MetricCell(label: "Cadence", value: session.cadence.map(String.init) ?? "– – –",
                            unit: "rpm", color: Theme.value, valueSize: 34)
-                MetricCell(label: "Mean Cadence", value: session.avgCadence.map(String.init) ?? "– – –",
+                MetricCell(label: "Mean", value: session.avgCadence.map(String.init) ?? "– – –",
                            unit: "rpm", color: Theme.value, valueSize: 26)
-                MetricCell(label: "Max Cadence", value: session.maxCadence.map(String.init) ?? "– – –",
+                MetricCell(label: "Max", value: session.maxCadence.map(String.init) ?? "– – –",
                            unit: "rpm", color: Theme.value, valueSize: 26)
             }
             divider
