@@ -39,6 +39,16 @@ final class RideSession: ObservableObject {
     @Published var autoPauseEnabled: Bool = (UserDefaults.standard.object(forKey: "bike.autoPause") as? Bool) ?? true {
         didSet { UserDefaults.standard.set(autoPauseEnabled, forKey: "bike.autoPause") }
     }
+    /// 자동 일시정지 임계 속도(m/s, 기본 0.7 ≈ 2.5km/h).
+    @Published var autoPauseThresholdMps: Double = (UserDefaults.standard.object(forKey: "bike.autoPauseMps") as? Double) ?? 0.7 {
+        didSet { UserDefaults.standard.set(autoPauseThresholdMps, forKey: "bike.autoPauseMps") }
+    }
+    /// 자동 일시정지 지연(초, 기본 3).
+    @Published var autoPauseDelay: Double = (UserDefaults.standard.object(forKey: "bike.autoPauseDelay") as? Double) ?? 3 {
+        didSet { UserDefaults.standard.set(autoPauseDelay, forKey: "bike.autoPauseDelay") }
+    }
+    /// 현재 자동 일시정지 상태(배지 표시용).
+    @Published private(set) var autoPaused = false
 
     /// GPX 가져오기 진행/결과 표시.
     @Published var importStatus: String?
@@ -147,10 +157,7 @@ final class RideSession: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
 
     private let movingSpeedThresholdMps = 0.8  // 이 속도 이상이면 "움직이는 중"
-    private let autoPauseThresholdMps = 0.7     // 이 속도 미만이면 "정지(바퀴 안 구름)"
-    private let autoPauseDelay: TimeInterval = 3
     private var belowThresholdSeconds: TimeInterval = 0
-    private var autoPaused = false              // 자동 일시정지 상태(수동 정지와 구분)
 
     init() {
         // 시계 + 라이딩 타이머 (0.5초 간격)

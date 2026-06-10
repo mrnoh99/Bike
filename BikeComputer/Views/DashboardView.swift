@@ -21,6 +21,9 @@ struct DashboardView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+            if session.state == .paused && session.autoPaused {
+                autoPauseBadge
+            }
             ScrollView {
                 grid
             }
@@ -248,6 +251,19 @@ struct DashboardView: View {
         session.state == .running ? Theme.red : Theme.green
     }
 
+    // 자동 일시정지 배지
+    private var autoPauseBadge: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "pause.circle.fill")
+            Text("AUTO PAUSE")
+        }
+        .font(.system(size: 13, weight: .heavy))
+        .foregroundColor(.black)
+        .padding(.horizontal, 14).padding(.vertical, 6)
+        .background(Capsule().fill(Theme.gold))
+        .padding(.vertical, 4)
+    }
+
     // GPS 정확도 표시줄
     private var gpsBar: some View {
         HStack(spacing: 6) {
@@ -315,7 +331,25 @@ struct DashboardView: View {
                 }
                 Section("자동 일시정지") {
                     Toggle("바퀴 멈추면 자동 일시정지", isOn: $session.autoPauseEnabled)
-                    Text("정지 시 약 3초 후 자동으로 일시정지되고, 다시 구르면 자동 재개됩니다.")
+                    if session.autoPauseEnabled {
+                        HStack {
+                            Text("임계 속도")
+                            Spacer()
+                            Text("\(session.autoPauseThresholdMps * 3.6, specifier: "%.1f") km/h")
+                                .foregroundColor(.secondary)
+                        }
+                        Slider(value: Binding(
+                            get: { session.autoPauseThresholdMps * 3.6 },
+                            set: { session.autoPauseThresholdMps = $0 / 3.6 }),
+                               in: 1...10, step: 0.5)
+                        HStack {
+                            Text("지연 시간")
+                            Spacer()
+                            Text("\(Int(session.autoPauseDelay))초").foregroundColor(.secondary)
+                        }
+                        Slider(value: $session.autoPauseDelay, in: 1...10, step: 1)
+                    }
+                    Text("바퀴가 임계 속도 미만으로 지연 시간만큼 멈추면 자동 일시정지되고, 다시 구르면 자동 재개됩니다.")
                         .font(.caption).foregroundColor(.secondary)
                 }
                 Section("속도 센서") {
