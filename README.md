@@ -38,8 +38,10 @@
      워치는 워크아웃 세션만 종료(저장은 폰이 담당 → 중복 방지). 심박은 세션 동안 시스템이 기록.
   2. **iOS 캘린더** 요약 이벤트(`EventKit`, Cyclemeter 형식) — 제목 `"{자전거}, time {시간}, distance {거리} km"`,
      위치=경로명, 메모 `Route / Ride Time / Stopped Time / Distance`. (`NSCalendarsWriteOnlyAccessUsageDescription` 필요)
-  3. **GPX 내보내기** — 경로를 `.gpx` 로 저장. 위치: **iCloud Drive > BikeCom > GPX**
+  3. **GPX 내보내기** — 경로를 `.gpx` 로 저장. 지점별 **고도(ele)·시각·심박·속도**
+     (Garmin `gpxtpx:TrackPointExtension`) 포함. 위치: **iCloud Drive > BikeCom > GPX**
      (iCloud 미사용 시 로컬 Files 앱 > 나의 iPhone > Bike > GPX).
+     Routes 상세 화면의 **GPX 공유** 버튼(`ShareLink`)으로도 내보낼 수 있다.
   4. iCloud/로컬 **상세 기록**(`rides.json`) 추가 → Routes 탭.
 - **iCloud 동기화**: 앱 iCloud 컨테이너를 iCloud Drive 에 **`BikeCom`** 폴더로 표시
   (`NSUbiquitousContainers` / `NSUbiquitousContainerName`). 그 안에 `rides.json`(상세+경로)과 `GPX/` 저장 →

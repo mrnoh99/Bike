@@ -15,19 +15,23 @@ struct RideRecord: Identifiable, Codable {
     var maxHeartRate: Int?
     var avgHeartRate: Int?
     var maxCadence: Int?
-    /// 경로 좌표(저장 시 압축을 위해 위/경도 쌍 배열).
+    /// 경로 좌표 + 지점별 고도·시각·속도·심박(GPX 확장 태그용).
     var track: [Coordinate]
 
     struct Coordinate: Codable {
         var lat: Double
         var lon: Double
+        var ele: Double? = nil      // 고도(m)
+        var time: Date? = nil       // 측정 시각
+        var speed: Double? = nil    // 속도(m/s)
+        var hr: Int? = nil          // 심박(bpm)
         var clCoordinate: CLLocationCoordinate2D { .init(latitude: lat, longitude: lon) }
     }
 
     init(id: UUID = UUID(), name: String, startedAt: Date, duration: TimeInterval,
          totalElapsed: TimeInterval, distanceMeters: Double, averageSpeedMps: Double,
          maxSpeedMps: Double, maxHeartRate: Int?, avgHeartRate: Int?, maxCadence: Int?,
-         track: [CLLocationCoordinate2D]) {
+         track: [Coordinate]) {
         self.id = id
         self.name = name
         self.startedAt = startedAt
@@ -39,7 +43,7 @@ struct RideRecord: Identifiable, Codable {
         self.maxHeartRate = maxHeartRate
         self.avgHeartRate = avgHeartRate
         self.maxCadence = maxCadence
-        self.track = track.map { Coordinate(lat: $0.latitude, lon: $0.longitude) }
+        self.track = track
     }
 }
 

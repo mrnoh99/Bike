@@ -162,10 +162,14 @@ final class HealthStore: ObservableObject {
         guard !record.track.isEmpty else { return }
         let n = record.track.count
         let locations: [CLLocation] = record.track.enumerated().map { i, c in
-            let t = record.startedAt.addingTimeInterval(record.totalElapsed * Double(i) / Double(max(1, n - 1)))
-            return CLLocation(coordinate: c.clCoordinate, altitude: 0,
-                              horizontalAccuracy: 5, verticalAccuracy: -1,
-                              course: -1, speed: -1, timestamp: t)
+            let t = c.time ?? record.startedAt.addingTimeInterval(record.totalElapsed * Double(i) / Double(max(1, n - 1)))
+            return CLLocation(coordinate: c.clCoordinate,
+                              altitude: c.ele ?? 0,
+                              horizontalAccuracy: 5,
+                              verticalAccuracy: c.ele != nil ? 5 : -1,
+                              course: -1,
+                              speed: c.speed ?? -1,
+                              timestamp: t)
         }
         let routeBuilder = HKWorkoutRouteBuilder(healthStore: healthStore, device: .local())
         routeBuilder.insertRouteData(locations) { ok, _ in

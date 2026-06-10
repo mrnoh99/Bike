@@ -52,6 +52,7 @@ struct RoutesView: View {
 struct RideDetailView: View {
     let record: RideRecord
     let unit: DistanceUnit
+    @State private var gpxURL: URL?
 
     var body: some View {
         ScrollView {
@@ -74,11 +75,27 @@ struct RideDetailView: View {
                     stat("총 경과", formatDuration(record.totalElapsed), Theme.value)
                 }
                 .padding(.horizontal)
+
+                if let gpxURL {
+                    ShareLink(item: gpxURL) {
+                        Label("GPX 공유", systemImage: "square.and.arrow.up")
+                            .font(.system(size: 16, weight: .semibold))
+                            .frame(maxWidth: .infinity).frame(height: 48)
+                            .background(Color(white: 0.14), in: Capsule())
+                    }
+                    .padding(.horizontal)
+                }
             }
             .padding(.vertical)
         }
         .navigationTitle(record.name)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let gpxURL {
+                ShareLink(item: gpxURL) { Image(systemName: "square.and.arrow.up") }
+            }
+        }
+        .onAppear { if gpxURL == nil { gpxURL = GPXExporter.writeTempGPX(record) } }
     }
 
     private func stat(_ label: String, _ value: String, _ color: Color) -> some View {

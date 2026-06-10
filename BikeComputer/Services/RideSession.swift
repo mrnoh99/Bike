@@ -55,6 +55,7 @@ final class RideSession: ObservableObject {
 
     private var heartRateSamples: [Int] = []
     private var cadenceSamples: [Int] = []
+    private var hrSeries: [(time: Date, bpm: Int)] = []   // GPX 트랙 심박 매칭용(시각 포함)
     private var startedAt: Date?
     private var timer: AnyCancellable?
     private var cancellables = Set<AnyCancellable>()
@@ -163,7 +164,7 @@ final class RideSession: ObservableObject {
             maxHeartRate: maxHeartRate,
             avgHeartRate: avgHeartRate,
             maxCadence: maxCadence,
-            track: location.track
+            track: buildTrackPoints()
         )
         // 의미 있는 라이딩만 저장 (10초 미만·0거리 제외).
         if distanceMeters > 5 || rideSeconds > 10 {
@@ -306,8 +307,36 @@ final class RideSession: ObservableObject {
         heartRate = bpm
         if let bpm, bpm > 0 {
             maxHeartRate = max(maxHeartRate ?? 0, bpm)
-            if state == .running { heartRateSamples.append(bpm) }
+            if state == .running {
+                heartRateSamples.append(bpm)
+                hrSeries.append((Date(), bpm))
+            }
         }
+    }
+
+    /// 트랙 지점별 좌표 + 고도·시각·속도(GPS) + 심박(시계열 매칭)을 만든다.
+    private func buildTrackPoints() -> [RideRecord.Coordinate] {
+        location.locations.map { loc in
+            RideRecord.Coordinate(
+                lat: loc.coordinate.latitude,
+                lon: loc.coordinate.longitude,
+                ele: loc.verticalAccuracy >= 0 ? loc.altitude : nil,
+                time: loc.timestamp,
+                speed: loc.speed >= 0 ? loc.speed : nil,
+                hr: hrAt(loc.timestamp))
+        }
+    }
+
+    /// 해당 시각과 가장 가까운(±15초) 심박 샘플.
+    private func hrAt(_ time: Date) -> Int? {
+        guard !hrSeries.isEmpty else { return nil }
+        var best: (dt: TimeInterval, bpm: Int)?
+        for s in hrSeries {
+            let dt = abs(s.time.timeIntervalSince(time))
+            if best == nil || dt < best!.dt { best = (dt, s.bpm) }
+        }
+        if let best, best.dt <= 15 { return best.bpm }
+        return nil
     }
 
     private func resetRide() {
@@ -321,6 +350,7 @@ final class RideSession: ObservableObject {
         maxCadence = nil
         heartRateSamples = []
         cadenceSamples = []
+        hrSeries = []
     }
 }
 

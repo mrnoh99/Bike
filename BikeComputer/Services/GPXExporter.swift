@@ -1,8 +1,8 @@
 import Foundation
 
-/// 라이딩 경로를 GPX 파일로 내보낸다.
-/// 저장 위치: **iCloud Drive > BikeCom > GPX** (앱 iCloud 컨테이너의 Documents/GPX).
-/// iCloud 를 못 쓰면 로컬 Documents/GPX 로 폴백(Files 앱 > 나의 iPhone > Bike > GPX).
+/// 라이딩 경로를 GPX 1.1 로 내보낸다.
+/// 지점별 **고도(ele)·시각(time)·심박·속도**(Garmin `gpxtpx:TrackPointExtension`) 포함.
+/// 저장 위치: **iCloud Drive > BikeCom > GPX** (없으면 로컬 Documents/GPX → Files 앱).
 enum GPXExporter {
 
     /// 라이딩 1건을 GPX 로 저장한다. (iCloud 해석이 느릴 수 있어 백그라운드에서 수행)
@@ -22,6 +22,14 @@ enum GPXExporter {
         }
     }
 
+    /// 공유 시트용 임시 GPX 파일 URL 생성.
+    static func writeTempGPX(_ record: RideRecord) -> URL? {
+        guard !record.track.isEmpty, let data = makeGPX(record).data(using: .utf8) else { return nil }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(fileStem(record)).gpx")
+        try? data.write(to: url, options: .atomic)
+        return url
+    }
+
     /// GPX 저장 폴더: iCloud 컨테이너(BikeCom)의 Documents/GPX, 없으면 로컬 Documents/GPX.
     static func gpxFolder() -> URL {
         if let container = FileManager.default.url(forUbiquityContainerIdentifier: nil) {
@@ -38,12 +46,24 @@ enum GPXExporter {
         let n = record.track.count
         var points = ""
         for (i, c) in record.track.enumerated() {
-            let t = record.startedAt.addingTimeInterval(record.totalElapsed * Double(i) / Double(max(1, n - 1)))
-            points += "    <trkpt lat=\"\(c.lat)\" lon=\"\(c.lon)\"><time>\(iso.string(from: t))</time></trkpt>\n"
+            let time = c.time ?? record.startedAt.addingTimeInterval(record.totalElapsed * Double(i) / Double(max(1, n - 1)))
+            var inner = ""
+            if let ele = c.ele { inner += "<ele>\(String(format: "%.1f", ele))</ele>" }
+            inner += "<time>\(iso.string(from: time))</time>"
+
+            var ext = ""
+            if let hr = c.hr { ext += "<gpxtpx:hr>\(hr)</gpxtpx:hr>" }
+            if let sp = c.speed { ext += "<gpxtpx:speed>\(String(format: "%.2f", sp))</gpxtpx:speed>" }
+            if !ext.isEmpty {
+                inner += "<extensions><gpxtpx:TrackPointExtension>\(ext)</gpxtpx:TrackPointExtension></extensions>"
+            }
+            points += "      <trkpt lat=\"\(c.lat)\" lon=\"\(c.lon)\">\(inner)</trkpt>\n"
         }
         return """
         <?xml version="1.0" encoding="UTF-8"?>
-        <gpx version="1.1" creator="Bike Computer" xmlns="http://www.topografix.com/GPX/1/1">
+        <gpx version="1.1" creator="Bike Computer"
+             xmlns="http://www.topografix.com/GPX/1/1"
+             xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">
           <metadata><time>\(iso.string(from: record.startedAt))</time></metadata>
           <trk>
             <name>\(escape(record.name))</name>

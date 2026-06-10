@@ -12,6 +12,8 @@ final class LocationManager: NSObject, ObservableObject {
     /// 현재 라이딩의 누적 GPS 거리(미터)와 경로 좌표.
     @Published private(set) var distanceMeters: Double = 0
     @Published private(set) var track: [CLLocationCoordinate2D] = []
+    /// 트랙과 동일 지점의 전체 위치(고도·속도·시각 포함) — GPX 확장 태그용.
+    @Published private(set) var locations: [CLLocation] = []
 
     private let manager = CLLocationManager()
     private var recording = false
@@ -34,6 +36,7 @@ final class LocationManager: NSObject, ObservableObject {
     func startRecording() {
         distanceMeters = 0
         track = []
+        locations = []
         previousLocation = nil
         recording = true
         manager.allowsBackgroundLocationUpdates = (manager.authorizationStatus == .authorizedAlways)
@@ -88,5 +91,6 @@ extension LocationManager: CLLocationManagerDelegate {
         }
         previousLocation = loc
         track.append(loc.coordinate)
+        locations.append(loc)
     }
 }
