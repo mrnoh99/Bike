@@ -43,7 +43,7 @@ final class WatchSensorManager: NSObject, ObservableObject {
         guard HKHealthStore.isHealthDataAvailable() else { return }
         let workout = HKObjectType.workoutType()
         var read: Set<HKObjectType> = [workout]
-        var share: Set<HKSampleType> = [workout]
+        var share: Set<HKSampleType> = [workout, HKSeriesType.workoutRoute()]   // 경로 저장용
         for id in [HKQuantityTypeIdentifier.heartRate, .distanceCycling] {
             if let t = HKQuantityType.quantityType(forIdentifier: id) {
                 read.insert(t); share.insert(t)

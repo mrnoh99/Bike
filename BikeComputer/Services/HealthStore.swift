@@ -1,5 +1,6 @@
 import Foundation
 import HealthKit
+import CoreLocation
 
 /// 폰 측 Apple Health 연동.
 /// - 누적 거리(이번달/올해/총)를 건강 앱의 **모든 사이클링 거리(`distanceCycling`)** 합에서 읽는다.
@@ -123,7 +124,8 @@ final class HealthStore: ObservableObject {
         healthStore.execute(q)
     }
 
-    /// 폰 단독 라이딩을 건강 앱에 사이클링 워크아웃으로 저장한다.
+    /// 라이딩을 건강 앱에 사이클링 워크아웃으로 저장한다(거리 + GPS 경로).
+    /// 심박은 워치 워크아웃 세션 동안 시스템이 HealthKit 에 기록하므로 별도 추가하지 않는다.
     func saveRide(_ record: RideRecord) {
         guard HKHealthStore.isHealthDataAvailable() else { return }
         let config = HKWorkoutConfiguration()
@@ -138,7 +140,8 @@ final class HealthStore: ObservableObject {
             guard ok else { return }
             let finish = {
                 builder.endCollection(withEnd: end) { _, _ in
-                    builder.finishWorkout { _, _ in
+                    builder.finishWorkout { workout, _ in
+                        if let workout { self?.saveRoute(record, to: workout) }
                         DispatchQueue.main.async { self?.refreshTotals() }
                     }
                 }
@@ -151,6 +154,23 @@ final class HealthStore: ObservableObject {
             } else {
                 finish()
             }
+        }
+    }
+
+    /// GPS 트랙을 HKWorkoutRoute 로 워크아웃에 첨부한다(건강 앱 지도 표시).
+    private func saveRoute(_ record: RideRecord, to workout: HKWorkout) {
+        guard !record.track.isEmpty else { return }
+        let n = record.track.count
+        let locations: [CLLocation] = record.track.enumerated().map { i, c in
+            let t = record.startedAt.addingTimeInterval(record.totalElapsed * Double(i) / Double(max(1, n - 1)))
+            return CLLocation(coordinate: c.clCoordinate, altitude: 0,
+                              horizontalAccuracy: 5, verticalAccuracy: -1,
+                              course: -1, speed: -1, timestamp: t)
+        }
+        let routeBuilder = HKWorkoutRouteBuilder(healthStore: healthStore, device: .local())
+        routeBuilder.insertRouteData(locations) { ok, _ in
+            guard ok else { return }
+            routeBuilder.finishRoute(with: workout, metadata: nil) { _, _ in }
         }
     }
 

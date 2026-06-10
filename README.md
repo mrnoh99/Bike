@@ -33,11 +33,17 @@
   ⚠️ **앱이 센서를 직접 켤 수는 없다** — `HKLiveWorkoutBuilder` 에 SpO2 라이브 타입이 없고, 측정을 강제할
   공개 API 도 없다. 실제 측정은 사용자가 시스템 **'혈중 산소' 앱**을 열거나 watchOS 자동측정이 수행하며,
   손목이 정지해야 하므로 페달링 중엔 잘 안 잡힌다(휴식·신호대기 시 측정). 일부 지역 모델은 혈중 산소 기능이 비활성일 수 있다.
-- **Done(종료) 루틴**: ① 운동을 **Apple 건강**에 HKWorkout 으로 저장(워치 사용 시 워치, 폰 단독이면 폰),
-  ② **iOS 캘린더에 운동 요약 이벤트** 기록(`EventKit`, Cyclemeter 형식) —
-  제목 `"{자전거}, time {라이딩시간}, distance {거리} km"`, 위치=경로명,
-  메모 `Route / Ride Time / Stopped Time / Distance`, 시작·종료=라이딩 시작~종료.
-  기본 캘린더에 추가하며, 캘린더 쓰기 권한(`NSCalendarsWriteOnlyAccessUsageDescription`)이 필요하다.
+- **Done(종료) 루틴** — 의미 있는 라이딩이면 4가지를 한 번에 수행:
+  1. **Apple 건강(HKWorkout)** 저장 — 폰이 거리 + **GPS 경로(`HKWorkoutRoute`)** 까지 첨부(건강 앱 지도 표시).
+     워치는 워크아웃 세션만 종료(저장은 폰이 담당 → 중복 방지). 심박은 세션 동안 시스템이 기록.
+  2. **iOS 캘린더** 요약 이벤트(`EventKit`, Cyclemeter 형식) — 제목 `"{자전거}, time {시간}, distance {거리} km"`,
+     위치=경로명, 메모 `Route / Ride Time / Stopped Time / Distance`. (`NSCalendarsWriteOnlyAccessUsageDescription` 필요)
+  3. **GPX 내보내기** — 경로를 `.gpx` 로 저장. 위치: **Files 앱 > 나의 iPhone > Bike > GPX**
+     (`UIFileSharingEnabled`/`LSSupportsOpeningDocumentsInPlace`).
+  4. 로컬/iCloud **상세 기록**(`rides.json`) 추가 → Routes 탭.
+- **iCloud 동기화**: `rides.json`(라이딩 상세 + 경로 좌표)을 **iCloud Documents 컨테이너**에 저장해 기기 간 동기화.
+  iCloud 미사용 시 로컬 Documents 로 폴백. (Xcode 에서 **iCloud > iCloud Documents** Capability + 컨테이너
+  `iCloud.com.example.bikecomputer` 설정 필요)
 - 백그라운드에서도 블루투스·위치 계속 기록(`UIBackgroundModes`).
 
 ### 애플워치 측정 (watchOS 컴패니언 앱)
@@ -93,8 +99,10 @@ BikeComputer/                       # 아이폰 앱
   Models/     Units.swift · RideRecord.swift(+RideStore)
   Services/   BluetoothManager.swift      # CoreBluetooth: CSC(속도·케이던스) 파싱 — 폴백
               LocationManager.swift       # CoreLocation: GPS 속도·거리·트랙
-              WatchSensorManager.swift    # WCSession: 워치 심박·속도·케이던스 수신
-              HealthStore.swift           # HealthKit: 누적 거리 집계 + 폰 단독 워크아웃 저장
+              WatchSensorManager.swift    # WCSession: 워치 심박·속도·케이던스·SpO2 수신
+              HealthStore.swift           # HealthKit: 누적 거리·SpO2 + 워크아웃(거리+경로) 저장
+              CalendarLogger.swift        # EventKit: Done 시 캘린더 요약 이벤트
+              GPXExporter.swift           # 경로 GPX 내보내기(Files 앱 GPX 폴더)
               RideSession.swift           # 메인 뷰모델(상태머신·소스우선순위·통계·저장)
   Views/      RootTabView · DashboardView · MapTabView · RoutesView
               DevicesView · MoreView · Components/MetricCell
@@ -114,6 +122,6 @@ BikeComputerWatch/                  # 애플워치 앱
 
 - 라이딩 거리는 GPS 트랙 기준이며, 누적 거리(이번달/올해/총)는 Apple 건강의 사이클링 거리 합으로 집계.
 - 워치 속도/케이던스는 워치 설정에서 BLE 센서를 OS 에 페어링해야 동작(watchOS 10+).
-- GPX 내보내기 · 랩(구간) 기록 · 사용자 자전거 다중 프로필 미구현.
+- 랩(구간) 기록 · 사용자 자전거 다중 프로필 미구현. (GPX 내보내기·HealthKit 경로·iCloud 동기화는 구현됨)
 - 앱 아이콘 이미지 미포함(placeholder, 폰·워치 공통).
 - `startWatchApp(toHandle:)` 는 워치 앱이 설치되어 있어야 동작. 워치에서 직접 **시작** 버튼으로도 측정 가능.

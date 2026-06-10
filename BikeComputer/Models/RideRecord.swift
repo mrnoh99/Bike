@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import CoreLocation
 
 /// 완료된 라이딩 1건. Routes 탭과 누적 통계(이번달/올해/총) 계산에 쓰인다.
@@ -42,17 +43,25 @@ struct RideRecord: Identifiable, Codable {
     }
 }
 
-/// 라이딩 기록 저장소 + 누적 거리 통계. JSON 파일로 영속화한다.
+/// 라이딩 기록 저장소 + 누적 거리 통계.
+/// `rides.json` 을 **iCloud Documents 컨테이너**에 저장해 기기 간 동기화한다.
+/// iCloud 를 못 쓰면 로컬 Documents 로 폴백한다.
 final class RideStore: ObservableObject {
     @Published private(set) var records: [RideRecord] = []
 
-    private let fileURL: URL
+    private let fileName = "rides.json"
+    private let localURL: URL
+    private var cloudURL: URL?            // iCloud 사용 가능 시 설정
+    private var metadataQuery: NSMetadataQuery?
 
     init() {
-        let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        fileURL = dir.appendingPathComponent("rides.json")
-        load()
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        localURL = docs.appendingPathComponent(fileName)
+        load()           // 우선 로컬에서 즉시 로드
+        resolveCloud()   // iCloud 컨테이너 비동기 확인 → 있으면 그쪽과 동기화
     }
+
+    private var fileURL: URL { cloudURL ?? localURL }
 
     func add(_ record: RideRecord) {
         records.insert(record, at: 0)
@@ -82,18 +91,73 @@ final class RideStore: ObservableObject {
         records.reduce(0) { $0 + $1.distanceMeters }
     }
 
-    // MARK: 영속화
+    // MARK: 영속화 (파일 코디네이터 — iCloud 안전 읽기/쓰기)
 
     private func load() {
-        guard let data = try? Data(contentsOf: fileURL) else { return }
-        if let decoded = try? JSONDecoder().decode([RideRecord].self, from: data) {
-            records = decoded
+        let url = fileURL
+        let coordinator = NSFileCoordinator()
+        var err: NSError?
+        coordinator.coordinate(readingItemAt: url, options: [], error: &err) { u in
+            guard let data = try? Data(contentsOf: u),
+                  let decoded = try? JSONDecoder().decode([RideRecord].self, from: data) else { return }
+            DispatchQueue.main.async { self.records = decoded }
         }
     }
 
     private func save() {
-        if let data = try? JSONEncoder().encode(records) {
-            try? data.write(to: fileURL, options: .atomic)
+        let url = fileURL
+        guard let data = try? JSONEncoder().encode(records) else { return }
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                 withIntermediateDirectories: true)
+        let coordinator = NSFileCoordinator()
+        var err: NSError?
+        coordinator.coordinate(writingItemAt: url, options: .forReplacing, error: &err) { u in
+            try? data.write(to: u, options: .atomic)
         }
+    }
+
+    // MARK: iCloud 동기화
+
+    private func resolveCloud() {
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self,
+                  let container = FileManager.default.url(forUbiquityContainerIdentifier: nil) else { return }
+            let docs = container.appendingPathComponent("Documents", isDirectory: true)
+            try? FileManager.default.createDirectory(at: docs, withIntermediateDirectories: true)
+            let url = docs.appendingPathComponent(self.fileName)
+            DispatchQueue.main.async {
+                self.cloudURL = url
+                self.migrateLocalToCloudIfNeeded()
+                self.load()
+                self.startMetadataQuery()
+            }
+        }
+    }
+
+    /// 로컬에만 기록이 있고 iCloud 엔 아직 없으면 1회 업로드.
+    private func migrateLocalToCloudIfNeeded() {
+        guard let cloudURL else { return }
+        let fm = FileManager.default
+        if !fm.fileExists(atPath: cloudURL.path), fm.fileExists(atPath: localURL.path),
+           let data = try? Data(contentsOf: localURL) {
+            try? data.write(to: cloudURL, options: .atomic)
+        }
+    }
+
+    /// 다른 기기에서 바뀐 rides.json 을 감지해 다시 불러온다.
+    private func startMetadataQuery() {
+        let q = NSMetadataQuery()
+        q.searchScopes = [NSMetadataQueryUbiquitousDocumentsScope]
+        q.predicate = NSPredicate(format: "%K == %@", NSMetadataItemFSNameKey, fileName)
+        NotificationCenter.default.addObserver(self, selector: #selector(cloudChanged),
+                                               name: .NSMetadataQueryDidFinishGathering, object: q)
+        NotificationCenter.default.addObserver(self, selector: #selector(cloudChanged),
+                                               name: .NSMetadataQueryDidUpdate, object: q)
+        q.start()
+        metadataQuery = q
+    }
+
+    @objc private func cloudChanged() {
+        load()
     }
 }

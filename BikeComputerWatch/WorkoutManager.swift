@@ -144,13 +144,14 @@ final class WorkoutManager: NSObject, ObservableObject {
         }
     }
 
-    /// 워크아웃 종료.
+    /// 워크아웃 종료. 워크아웃(HKWorkout)은 폰이 거리+경로와 함께 저장하므로
+    /// 워치는 세션만 종료하고 별도로 저장하지 않는다(중복 방지). 세션 동안의 심박은
+    /// 시스템이 HealthKit 에 기록한다.
     func stopWorkout() {
         guard let session else { return }
         session.end()
-        builder?.endCollection(withEnd: Date()) { [weak self] _, _ in
-            self?.builder?.finishWorkout { _, _ in }
-        }
+        // finishWorkout 을 호출하지 않으므로 HKWorkout 은 저장되지 않는다(폰이 저장).
+        builder?.endCollection(withEnd: Date()) { _, _ in }
         DispatchQueue.main.async {
             self.isRunning = false
             self.heartRate = 0

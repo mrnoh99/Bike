@@ -32,6 +32,12 @@
 	<key>UIUserInterfaceStyleDefault</key>
 	<string>Dark</string>
 
+	<!-- GPX 등 라이딩 파일을 Files 앱(나의 iPhone > Bike)에서 보고 공유 -->
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+
 	<!-- 권한 설명 (블루투스 센서·GPS) -->
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>속도·케이던스·심박수 센서에 연결하기 위해 블루투스를 사용합니다.</string>

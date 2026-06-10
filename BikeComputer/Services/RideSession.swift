@@ -148,8 +148,7 @@ final class RideSession: ObservableObject {
             return
         }
         location.stopRecording()
-        let watchSavedWorkout = watch.didReceiveWatchDataThisRide
-        watch.stopWatchWorkout()   // 워치 워크아웃 종료(워치가 HKWorkout 저장)
+        watch.stopWatchWorkout()   // 워치 워크아웃 세션 종료(저장은 폰이 담당)
 
         let avgSpeed = movingSeconds > 1 ? distanceMeters / movingSeconds : 0
 
@@ -168,13 +167,10 @@ final class RideSession: ObservableObject {
         )
         // 의미 있는 라이딩만 저장 (10초 미만·0거리 제외).
         if distanceMeters > 5 || rideSeconds > 10 {
-            store.add(record)   // 로컬 기록(목록·상세)
-            // 워치 없이 탄 라이딩만 폰이 건강 앱에 저장(워치 사용 시 워치가 저장 → 이중 계산 방지).
-            if !watchSavedWorkout {
-                health.saveRide(record)
-            }
-            // 캘린더에 운동 요약 기록(Cyclemeter 형식).
-            calendarLogger.logRide(record, bikeName: bikeName)
+            store.add(record)              // 로컬/iCloud 상세 기록(목록·상세)
+            health.saveRide(record)        // 건강 앱 워크아웃(거리 + GPS 경로)
+            calendarLogger.logRide(record, bikeName: bikeName)   // 캘린더 요약
+            GPXExporter.export(record)     // Files 앱 GPX 폴더로 내보내기
         }
         health.refreshTotals()
         state = .idle
