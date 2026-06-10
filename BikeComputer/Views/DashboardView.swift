@@ -87,12 +87,20 @@ struct DashboardView: View {
                            unit: "rpm", color: Theme.value, valueSize: 26)
             }
             divider
-            // 산소포화도: 워치가 기록한 최근 Health 값 + 측정 경과시간(실시간 연속 측정 아님).
+            // 산소포화도: 최근 / 24h 최저 / 24h 최고 + 각 측정 시각(작은 글씨).
             row {
-                MetricCell(label: "SpO2", value: session.spo2Percent.map(String.init) ?? "– – –",
-                           unit: "%", color: Theme.cyan, valueSize: 34)
-                MetricCell(label: "측정 시각", value: session.spo2AgeText ?? "—",
-                           color: Theme.label, valueSize: 22)
+                MetricCell(label: "SpO2 최근",
+                           value: session.spo2Percent.map { "\($0)%" } ?? "– – –",
+                           subvalue: session.spo2LatestTimeText ?? " ",
+                           color: Theme.cyan, valueSize: 30)
+                MetricCell(label: "24h 최저",
+                           value: session.spo2MinPercent.map { "\($0)%" } ?? "– – –",
+                           subvalue: session.spo2MinTimeText ?? " ",
+                           color: Theme.cyan, valueSize: 26)
+                MetricCell(label: "24h 최고",
+                           value: session.spo2MaxPercent.map { "\($0)%" } ?? "– – –",
+                           subvalue: session.spo2MaxTimeText ?? " ",
+                           color: Theme.cyan, valueSize: 26)
             }
             divider
             // 누적 거리 3종을 한 줄에. This Year/Total 은 큰 숫자라 작은 글씨로 표시.

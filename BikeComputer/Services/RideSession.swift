@@ -229,19 +229,24 @@ final class RideSession: ObservableObject {
         }
     }
 
-    /// 최근 산소포화도(%).
-    var spo2Percent: Int? {
-        bestSpO2.map { Int(($0.pct * 100).rounded()) }
-    }
+    /// SpO2 — 최근 / 24시간 최저 / 24시간 최고 (%).
+    var spo2Percent: Int? { bestSpO2.map { Int(($0.pct * 100).rounded()) } }
+    var spo2MinPercent: Int? { health.minSpO2.map { Int(($0 * 100).rounded()) } }
+    var spo2MaxPercent: Int? { health.maxSpO2.map { Int(($0 * 100).rounded()) } }
 
-    /// 최근 SpO2 측정 경과 시간 표시("방금"/"12분 전"/"2시간 전"/"3일 전").
-    var spo2AgeText: String? {
-        guard let d = bestSpO2?.date else { return nil }
-        let s = Date().timeIntervalSince(d)
-        if s < 60 { return "방금" }
-        if s < 3600 { return "\(Int(s / 60))분 전" }
-        if s < 86400 { return "\(Int(s / 3600))시간 전" }
-        return "\(Int(s / 86400))일 전"
+    /// 각 SpO2 값의 측정 시각(작은 글씨용). 오늘=HH:mm, 어제='어제 HH:mm', 그 외=M/d HH:mm.
+    var spo2LatestTimeText: String? { Self.clockText(bestSpO2?.date) }
+    var spo2MinTimeText: String? { Self.clockText(health.minSpO2Date) }
+    var spo2MaxTimeText: String? { Self.clockText(health.maxSpO2Date) }
+
+    private static func clockText(_ d: Date?) -> String? {
+        guard let d else { return nil }
+        let cal = Calendar.current
+        let f = DateFormatter()
+        if cal.isDateInToday(d) { f.dateFormat = "HH:mm" }
+        else if cal.isDateInYesterday(d) { f.dateFormat = "'어제' HH:mm" }
+        else { f.dateFormat = "M/d HH:mm" }
+        return f.string(from: d)
     }
 
     // MARK: - 내부
@@ -350,7 +355,9 @@ extension RideSession {
         s.cadence = 88
         s.maxCadence = 97
         s.cadenceSamples = [80, 84, 86, 88, 90, 87]           // 평균 ≈ 86
-        s.health.seedPreviewSpO2(percent: 98, at: Date().addingTimeInterval(-12 * 60))  // 12분 전
+        s.health.seedPreviewSpO2(latest: 98, latestAt: now.addingTimeInterval(-12 * 60),
+                                 min: 95, minAt: now.addingTimeInterval(-7 * 3600),
+                                 max: 99, maxAt: now.addingTimeInterval(-3 * 3600))
         return s
     }
 }

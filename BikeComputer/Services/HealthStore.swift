@@ -21,6 +21,11 @@ final class HealthStore: ObservableObject {
     /// watchOS 가 백그라운드로 기록한 값 — 실시간 연속 측정은 불가(운동 중 모션으로 측정도 드묾).
     @Published private(set) var latestSpO2: Double?
     @Published private(set) var latestSpO2Date: Date?
+    /// 24시간 이내 최저/최고 산소포화도와 그 측정 시각.
+    @Published private(set) var minSpO2: Double?
+    @Published private(set) var minSpO2Date: Date?
+    @Published private(set) var maxSpO2: Double?
+    @Published private(set) var maxSpO2Date: Date?
 
     private let healthStore = HKHealthStore()
     private var distanceType: HKQuantityType? {
@@ -56,19 +61,35 @@ final class HealthStore: ObservableObject {
         }
     }
 
-    /// 가장 최근 산소포화도 1건을 읽어 발행한다.
+    /// 최근 산소포화도 1건 + 24시간 이내 최저/최고를 읽어 발행한다.
     func refreshSpO2() {
         guard HKHealthStore.isHealthDataAvailable(), let type = spo2Type else { return }
+
+        // 최근 1건(시간 제한 없음).
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
-        let q = HKSampleQuery(sampleType: type, predicate: nil, limit: 1, sortDescriptors: [sort]) { [weak self] _, samples, _ in
+        let qLatest = HKSampleQuery(sampleType: type, predicate: nil, limit: 1, sortDescriptors: [sort]) { [weak self] _, samples, _ in
             guard let s = samples?.first as? HKQuantitySample else { return }
-            let pct = s.quantity.doubleValue(for: .percent())   // 0~1
             DispatchQueue.main.async {
-                self?.latestSpO2 = pct
+                self?.latestSpO2 = s.quantity.doubleValue(for: .percent())
                 self?.latestSpO2Date = s.endDate
             }
         }
-        healthStore.execute(q)
+        healthStore.execute(qLatest)
+
+        // 24시간 이내 최저/최고(값과 그 측정 시각).
+        let dayAgo = Date().addingTimeInterval(-86_400)
+        let pred = HKQuery.predicateForSamples(withStart: dayAgo, end: nil, options: .strictStartDate)
+        let q24 = HKSampleQuery(sampleType: type, predicate: pred, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { [weak self] _, samples, _ in
+            let qs = (samples as? [HKQuantitySample]) ?? []
+            func val(_ s: HKQuantitySample) -> Double { s.quantity.doubleValue(for: .percent()) }
+            let mn = qs.min { val($0) < val($1) }
+            let mx = qs.max { val($0) < val($1) }
+            DispatchQueue.main.async {
+                self?.minSpO2 = mn.map(val); self?.minSpO2Date = mn?.endDate
+                self?.maxSpO2 = mx.map(val); self?.maxSpO2Date = mx?.endDate
+            }
+        }
+        healthStore.execute(q24)
     }
 
     /// 이번달/올해/총 사이클링 거리(미터)를 다시 집계한다.
@@ -134,10 +155,12 @@ final class HealthStore: ObservableObject {
     }
 
     #if DEBUG
-    /// SwiftUI 프리뷰용 — 최근 SpO2 값 주입.
-    func seedPreviewSpO2(percent: Double, at date: Date) {
-        latestSpO2 = percent / 100
-        latestSpO2Date = date
+    /// SwiftUI 프리뷰용 — 최근/24h 최저/최고 SpO2 값 주입.
+    func seedPreviewSpO2(latest: Double, latestAt: Date,
+                         min: Double, minAt: Date, max: Double, maxAt: Date) {
+        latestSpO2 = latest / 100; latestSpO2Date = latestAt
+        minSpO2 = min / 100; minSpO2Date = minAt
+        maxSpO2 = max / 100; maxSpO2Date = maxAt
     }
     #endif
 }
