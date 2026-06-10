@@ -72,6 +72,14 @@ final class RideStore: ObservableObject {
         save()
     }
 
+    /// 대량 가져오기용: 한 번에 추가하고 1회만 저장(최신순 정렬).
+    func addMany(_ newRecords: [RideRecord]) {
+        guard !newRecords.isEmpty else { return }
+        records.append(contentsOf: newRecords)
+        records.sort { $0.startedAt > $1.startedAt }
+        save()
+    }
+
     func delete(_ record: RideRecord) {
         records.removeAll { $0.id == record.id }
         save()

@@ -1,8 +1,14 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
-/// More 탭 — 단위·센서·정보 등 기타 설정.
+/// More 탭 — 센서·정보·데이터 가져오기 등 기타 설정.
 struct MoreView: View {
     @EnvironmentObject var session: RideSession
+    @State private var showImporter = false
+
+    private var gpxTypes: [UTType] {
+        [UTType(filenameExtension: "gpx") ?? .xml, .xml, .folder]
+    }
 
     var body: some View {
         NavigationView {
@@ -64,6 +70,21 @@ struct MoreView: View {
                     }
                 }
                 Section {
+                    Button {
+                        session.importStatus = nil
+                        showImporter = true
+                    } label: {
+                        Label("Cyclemeter GPX 가져오기", systemImage: "square.and.arrow.down")
+                    }
+                    if let status = session.importStatus {
+                        Text(status).font(.caption).foregroundColor(.secondary)
+                    }
+                } header: {
+                    Text("데이터 가져오기")
+                } footer: {
+                    Text("Cyclemeter 에서 라이딩을 GPX 로 내보낸 뒤, 여러 .gpx 파일이나 폴더를 통째로 선택하면 일괄로 가져옵니다(경로·심박·케이던스·속도 포함). 같은 시작 시각의 기록은 중복 제외됩니다.")
+                }
+                Section {
                     HStack { Text("버전"); Spacer(); Text("1.0").foregroundColor(.secondary) }
                     HStack { Text("디자인"); Spacer(); Text("Designed by Jaisung NOH MD 2026").foregroundColor(.secondary) }
                 } footer: {
@@ -71,6 +92,11 @@ struct MoreView: View {
                 }
             }
             .navigationTitle("More")
+            .fileImporter(isPresented: $showImporter,
+                          allowedContentTypes: gpxTypes,
+                          allowsMultipleSelection: true) { result in
+                if case .success(let urls) = result { session.importGPX(from: urls) }
+            }
         }
     }
 

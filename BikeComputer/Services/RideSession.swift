@@ -34,6 +34,46 @@ final class RideSession: ObservableObject {
     // 표시 단위
     @Published var unit: DistanceUnit = .kilometers
 
+    /// GPX 가져오기 진행/결과 표시.
+    @Published var importStatus: String?
+
+    /// 선택한 GPX 파일/폴더(들)에서 라이딩을 일괄 가져온다(Cyclemeter 마이그레이션).
+    func importGPX(from urls: [URL]) {
+        importStatus = "가져오는 중…"
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            var parsed: [RideRecord] = []
+            for url in urls {
+                let scoped = url.startAccessingSecurityScopedResource()
+                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+
+                var isDir: ObjCBool = false
+                FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
+                var files: [URL] = []
+                if isDir.boolValue {
+                    if let en = FileManager.default.enumerator(at: url, includingPropertiesForKeys: nil) {
+                        for case let f as URL in en where f.pathExtension.lowercased() == "gpx" { files.append(f) }
+                    }
+                } else {
+                    files = [url]
+                }
+                for f in files {
+                    if let data = try? Data(contentsOf: f),
+                       let rec = GPXImporter.parse(data: data, fallbackName: f.deletingPathExtension().lastPathComponent) {
+                        parsed.append(rec)
+                    }
+                }
+            }
+            DispatchQueue.main.async {
+                // 시작시각(초)이 같은 기존 기록은 중복으로 보고 건너뛴다.
+                let existing = Set(self.store.records.map { Int($0.startedAt.timeIntervalSince1970) })
+                let fresh = parsed.filter { !existing.contains(Int($0.startedAt.timeIntervalSince1970)) }
+                self.store.addMany(fresh)
+                self.importStatus = "가져오기 완료: \(fresh.count)개 추가 (스캔 \(parsed.count)개)"
+            }
+        }
+    }
+
     // 라벨(스크린샷의 "1.출근길" / "6.Yeti" 자리)
     @Published var routeName: String = "1.라이딩"
     @Published var bikeName: String = "내 자전거"
