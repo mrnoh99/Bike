@@ -272,12 +272,6 @@ struct DashboardView: View {
                     }
                     TextField("직접 입력", text: $session.bikeName)
                 }
-                Section("단위") {
-                    Picker("거리 단위", selection: $session.unit) {
-                        Text("킬로미터 (km)").tag(DistanceUnit.kilometers)
-                        Text("마일 (mi)").tag(DistanceUnit.miles)
-                    }
-                }
                 Section("속도 센서") {
                     HStack {
                         Text("휠 둘레")

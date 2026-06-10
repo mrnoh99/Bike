@@ -7,12 +7,6 @@ struct MoreView: View {
     var body: some View {
         NavigationView {
             List {
-                Section("표시 단위") {
-                    Picker("거리/속도", selection: $session.unit) {
-                        Text("킬로미터 (km/h)").tag(DistanceUnit.kilometers)
-                        Text("마일 (mph)").tag(DistanceUnit.miles)
-                    }
-                }
                 Section("라이딩") {
                     HStack { Text("라이딩 이름"); Spacer(); TextField("", text: $session.routeName).multilineTextAlignment(.trailing) }
                 }
