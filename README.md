@@ -38,12 +38,13 @@
      워치는 워크아웃 세션만 종료(저장은 폰이 담당 → 중복 방지). 심박은 세션 동안 시스템이 기록.
   2. **iOS 캘린더** 요약 이벤트(`EventKit`, Cyclemeter 형식) — 제목 `"{자전거}, time {시간}, distance {거리} km"`,
      위치=경로명, 메모 `Route / Ride Time / Stopped Time / Distance`. (`NSCalendarsWriteOnlyAccessUsageDescription` 필요)
-  3. **GPX 내보내기** — 경로를 `.gpx` 로 저장. 위치: **Files 앱 > 나의 iPhone > Bike > GPX**
-     (`UIFileSharingEnabled`/`LSSupportsOpeningDocumentsInPlace`).
-  4. 로컬/iCloud **상세 기록**(`rides.json`) 추가 → Routes 탭.
-- **iCloud 동기화**: `rides.json`(라이딩 상세 + 경로 좌표)을 **iCloud Documents 컨테이너**에 저장해 기기 간 동기화.
-  iCloud 미사용 시 로컬 Documents 로 폴백. (Xcode 에서 **iCloud > iCloud Documents** Capability + 컨테이너
-  `iCloud.com.example.bikecomputer` 설정 필요)
+  3. **GPX 내보내기** — 경로를 `.gpx` 로 저장. 위치: **iCloud Drive > BikeCom > GPX**
+     (iCloud 미사용 시 로컬 Files 앱 > 나의 iPhone > Bike > GPX).
+  4. iCloud/로컬 **상세 기록**(`rides.json`) 추가 → Routes 탭.
+- **iCloud 동기화**: 앱 iCloud 컨테이너를 iCloud Drive 에 **`BikeCom`** 폴더로 표시
+  (`NSUbiquitousContainers` / `NSUbiquitousContainerName`). 그 안에 `rides.json`(상세+경로)과 `GPX/` 저장 →
+  기기 간 동기화. iCloud 미사용 시 로컬 Documents 폴백. (Xcode 에서 **iCloud > iCloud Documents** Capability +
+  컨테이너 `iCloud.com.example.bikecomputer` 설정 필요)
 - 백그라운드에서도 블루투스·위치 계속 기록(`UIBackgroundModes`).
 
 ### 애플워치 측정 (watchOS 컴패니언 앱)

@@ -38,6 +38,20 @@
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 
+	<!-- iCloud Drive 에 'BikeCom' 폴더로 표시(앱 컨테이너) -->
+	<key>NSUbiquitousContainers</key>
+	<dict>
+		<key>iCloud.com.example.bikecomputer</key>
+		<dict>
+			<key>NSUbiquitousContainerIsDocumentScopePublic</key>
+			<true/>
+			<key>NSUbiquitousContainerName</key>
+			<string>BikeCom</string>
+			<key>NSUbiquitousContainerSupportedFolderLevels</key>
+			<string>Any</string>
+		</dict>
+	</dict>
+
 	<!-- 권한 설명 (블루투스 센서·GPS) -->
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>속도·케이던스·심박수 센서에 연결하기 위해 블루투스를 사용합니다.</string>
