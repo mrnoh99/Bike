@@ -191,15 +191,16 @@ struct DashboardView: View {
                     .frame(maxWidth: .infinity).frame(height: 48)
                     .background(Capsule().fill(startColor))
             }
-            Button(action: { session.finish() }) {
-                Text("Done")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity).frame(height: 48)
-                    .background(Capsule().fill(Theme.gray))
+            // Done 은 라이딩을 시작한 뒤에만(처음 idle 상태 제외) 표시.
+            if session.state != .idle {
+                Button(action: { session.finish() }) {
+                    Text("Done")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity).frame(height: 48)
+                        .background(Capsule().fill(Theme.gray))
+                }
             }
-            .disabled(session.state == .idle)
-            .opacity(session.state == .idle ? 0.5 : 1)
 
             Menu {
                 Button { dest = .map } label: { Label("지도", systemImage: "map") }
