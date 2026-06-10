@@ -61,9 +61,9 @@ struct DashboardView: View {
             }
             divider
             row {
-                MetricCell(label: "Ride Time", value: formatDuration(session.rideSeconds),
+                MetricCell(label: "Ride", value: formatDuration(session.rideSeconds),
                            subvalue: formatDuration(session.movingSeconds), color: Theme.gold, valueSize: 40)
-                MetricCell(label: "Total Time", value: formatDuration(session.totalSeconds),
+                MetricCell(label: "Total", value: formatDuration(session.totalSeconds),
                            color: Theme.gold, valueSize: 40)
             }
             divider
