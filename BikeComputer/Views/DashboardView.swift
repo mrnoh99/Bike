@@ -191,8 +191,8 @@ struct DashboardView: View {
                     .frame(maxWidth: .infinity).frame(height: 48)
                     .background(Capsule().fill(startColor))
             }
-            // Done 은 라이딩을 시작한 뒤에만(처음 idle 상태 제외) 표시.
-            if session.state != .idle {
+            // Done 은 일시정지(Stop 후) 상태에서만 Start 와 함께 표시. (running 중엔 Stop 혼자)
+            if session.state == .paused {
                 Button(action: { session.finish() }) {
                     Text("Done")
                         .font(.system(size: 18, weight: .bold))
