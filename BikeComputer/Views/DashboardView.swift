@@ -87,6 +87,14 @@ struct DashboardView: View {
                            unit: "rpm", color: Theme.value, valueSize: 26)
             }
             divider
+            // 산소포화도: 워치가 기록한 최근 Health 값 + 측정 경과시간(실시간 연속 측정 아님).
+            row {
+                MetricCell(label: "SpO2", value: session.spo2Percent.map(String.init) ?? "– – –",
+                           unit: "%", color: Theme.cyan, valueSize: 34)
+                MetricCell(label: "측정 시각", value: session.spo2AgeText ?? "—",
+                           color: Theme.label, valueSize: 22)
+            }
+            divider
             // 누적 거리 3종을 한 줄에. This Year/Total 은 큰 숫자라 작은 글씨로 표시.
             row {
                 MetricCell(label: "This Month", value: fmt(session.thisMonthDistance, 0),

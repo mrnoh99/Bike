@@ -13,6 +13,7 @@ enum Theme {
     static let blue = Color(red: 0.16, green: 0.55, blue: 1.0)   // 현재 속도
     static let red = Color(red: 1.0, green: 0.30, blue: 0.27)    // 심박수
     static let purple = Color(red: 0.75, green: 0.40, blue: 0.95) // 누적 거리(달/년/총)
+    static let cyan = Color(red: 0.25, green: 0.80, blue: 0.85)  // 산소포화도(SpO2)
     static let green = Color(red: 0.30, green: 0.78, blue: 0.40) // Start 버튼
     static let gray = Color(white: 0.30)                         // Done 버튼
 

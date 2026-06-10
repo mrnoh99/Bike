@@ -16,6 +16,8 @@ struct MetricCell: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(Theme.label)
                 .tracking(0.5)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)   // iPhone 12 mini(375pt) 3열에서도 라벨이 안 잘리도록
             Text(value)
                 .font(Theme.metricFont(valueSize))
                 .foregroundColor(color)

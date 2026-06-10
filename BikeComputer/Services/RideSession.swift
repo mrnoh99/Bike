@@ -216,6 +216,21 @@ final class RideSession: ObservableObject {
         return Int((Double(cadenceSamples.reduce(0, +)) / Double(cadenceSamples.count)).rounded())
     }
 
+    /// 최근 산소포화도(%). 워치가 백그라운드로 기록한 값(실시간 연속 측정 아님).
+    var spo2Percent: Int? {
+        health.latestSpO2.map { Int(($0 * 100).rounded()) }
+    }
+
+    /// 최근 SpO2 측정 경과 시간 표시("방금"/"12분 전"/"2시간 전"/"3일 전").
+    var spo2AgeText: String? {
+        guard let d = health.latestSpO2Date else { return nil }
+        let s = Date().timeIntervalSince(d)
+        if s < 60 { return "방금" }
+        if s < 3600 { return "\(Int(s / 60))분 전" }
+        if s < 86400 { return "\(Int(s / 3600))시간 전" }
+        return "\(Int(s / 86400))일 전"
+    }
+
     // MARK: - 내부
 
     private func tick() {
@@ -322,6 +337,7 @@ extension RideSession {
         s.cadence = 88
         s.maxCadence = 97
         s.cadenceSamples = [80, 84, 86, 88, 90, 87]           // 평균 ≈ 86
+        s.health.seedPreviewSpO2(percent: 98, at: Date().addingTimeInterval(-12 * 60))  // 12분 전
         return s
     }
 }

@@ -17,21 +17,57 @@ final class HealthStore: ObservableObject {
     /// 건강 권한이 허용되어 누적값을 읽어온 적이 있는지(폴백 판정용).
     @Published private(set) var hasHealthData = false
 
+    /// 가장 최근 산소포화도(0~1 비율)와 그 측정 시각.
+    /// watchOS 가 백그라운드로 기록한 값 — 실시간 연속 측정은 불가(운동 중 모션으로 측정도 드묾).
+    @Published private(set) var latestSpO2: Double?
+    @Published private(set) var latestSpO2Date: Date?
+
     private let healthStore = HKHealthStore()
     private var distanceType: HKQuantityType? {
         HKQuantityType.quantityType(forIdentifier: .distanceCycling)
     }
+    private var spo2Type: HKQuantityType? {
+        HKQuantityType.quantityType(forIdentifier: .oxygenSaturation)
+    }
     private var observer: HKObserverQuery?
+    private var spo2Observer: HKObserverQuery?
 
     /// 관찰 시작 + 첫 집계. 새 운동(워치 포함)이 저장되면 자동 재집계한다.
     func start() {
         refreshTotals()
-        guard observer == nil, HKHealthStore.isHealthDataAvailable(), let type = distanceType else { return }
-        let q = HKObserverQuery(sampleType: type, predicate: nil) { [weak self] _, completion, _ in
-            self?.refreshTotals()
-            completion()
+        refreshSpO2()
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+        if observer == nil, let type = distanceType {
+            let q = HKObserverQuery(sampleType: type, predicate: nil) { [weak self] _, completion, _ in
+                self?.refreshTotals()
+                completion()
+            }
+            observer = q
+            healthStore.execute(q)
         }
-        observer = q
+        // 새 SpO2 측정이 들어오면 자동 갱신.
+        if spo2Observer == nil, let type = spo2Type {
+            let q = HKObserverQuery(sampleType: type, predicate: nil) { [weak self] _, completion, _ in
+                self?.refreshSpO2()
+                completion()
+            }
+            spo2Observer = q
+            healthStore.execute(q)
+        }
+    }
+
+    /// 가장 최근 산소포화도 1건을 읽어 발행한다.
+    func refreshSpO2() {
+        guard HKHealthStore.isHealthDataAvailable(), let type = spo2Type else { return }
+        let sort = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
+        let q = HKSampleQuery(sampleType: type, predicate: nil, limit: 1, sortDescriptors: [sort]) { [weak self] _, samples, _ in
+            guard let s = samples?.first as? HKQuantitySample else { return }
+            let pct = s.quantity.doubleValue(for: .percent())   // 0~1
+            DispatchQueue.main.async {
+                self?.latestSpO2 = pct
+                self?.latestSpO2Date = s.endDate
+            }
+        }
         healthStore.execute(q)
     }
 
@@ -96,4 +132,12 @@ final class HealthStore: ObservableObject {
             }
         }
     }
+
+    #if DEBUG
+    /// SwiftUI 프리뷰용 — 최근 SpO2 값 주입.
+    func seedPreviewSpO2(percent: Double, at date: Date) {
+        latestSpO2 = percent / 100
+        latestSpO2Date = date
+    }
+    #endif
 }

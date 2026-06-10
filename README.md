@@ -5,6 +5,9 @@
 앱에 운동으로 기록되며, 누적 거리는 건강 데이터 기준으로 집계한다. Cyclemeter 스타일의 대시보드 UI를 SwiftUI 로 구현했다.
 
 > **최소 OS: iOS 26 / watchOS 26** (워치 HealthKit `cyclingSpeed`·`cyclingCadence` 요구사항).
+>
+> **대상 기기: iPhone 12 mini + Apple Watch Ultra (1세대)** 에 최적화.
+> iPhone 12 mini 는 375pt 폭(가장 좁은 화면)이라 메트릭 라벨이 자동 축소(`minimumScaleFactor`)되도록 했다.
 
 ## 화면 (하단 탭)
 
@@ -24,6 +27,10 @@
 - **폴백**: 워치가 없으면 폰이 직접 BLE(CSC 0x1816 속도·케이던스, 0x180D 심박)로 측정.
 - **누적 거리**: Apple **건강** 앱의 사이클링 거리(`distanceCycling`) 합 — 이번달/올해/총.
   (앱 설치 전·다른 기기 기록까지 포함, 재설치해도 유지. 권한 미허용 시 로컬 기록으로 폴백.)
+- **산소포화도(SpO2)**: 워치가 백그라운드로 기록한 **최근 값**을 HealthKit(`oxygenSaturation`)에서 읽어
+  표시(측정 경과시간 함께). ⚠️ **실시간 연속 측정은 불가** — `HKLiveWorkoutBuilder` 에 SpO2 라이브
+  타입이 없고, 앱이 측정을 강제할 공개 API 도 없다. 또한 SpO2 는 손목이 정지해야 측정되어 페달링
+  중에는 거의 기록되지 않는다(신호 대기·정지 시 갱신). 일부 지역 모델은 혈중 산소 기능이 비활성일 수 있다.
 - 백그라운드에서도 블루투스·위치 계속 기록(`UIBackgroundModes`).
 
 ### 애플워치 측정 (watchOS 컴패니언 앱)
