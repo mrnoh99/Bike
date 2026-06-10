@@ -1,5 +1,6 @@
 import SwiftUI
 import MapKit
+import UIKit
 
 /// 라이딩 목록 정렬 기준.
 enum RideSort: String, CaseIterable, Identifiable {
@@ -48,6 +49,7 @@ struct RoutesView: View {
     @EnvironmentObject var session: RideSession
     @State private var sort: RideSort = .newest
     @State private var grouped = false
+    @AppStorage("route.bucketMeters") private var bucketMeters: Double = 250
 
     var body: some View {
         NavigationView {
@@ -105,7 +107,19 @@ struct RoutesView: View {
     // 코스별 묶음(시작/끝 GPS + 거리로 분류)
     private var groupedList: some View {
         List {
-            ForEach(RouteGrouping.groups(session.store.records)) { group in
+            Section {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("코스 인식 반경")
+                        Spacer()
+                        Text("\(Int(bucketMeters)) m").foregroundColor(.secondary)
+                    }
+                    Slider(value: $bucketMeters, in: 100...1000, step: 50)
+                }
+            } footer: {
+                Text("시작·끝 위치가 이 반경 안이고 거리가 비슷하면 같은 코스로 묶습니다.")
+            }
+            ForEach(RouteGrouping.groups(session.store.records, radiusMeters: bucketMeters)) { group in
                 NavigationLink {
                     RouteGroupView(group: group, sort: sort)
                 } label: {
@@ -116,18 +130,24 @@ struct RoutesView: View {
     }
 
     private func groupRow(_ g: RouteGroup) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(g.title).font(.system(size: 16, weight: .semibold))
-                Spacer()
-                Text("\(g.rides.count)회")
-                    .font(.caption).foregroundColor(.secondary)
+        HStack(spacing: 12) {
+            RouteThumbnail(coords: (g.representative?.track ?? []).map { $0.clCoordinate })
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(g.title).font(.system(size: 16, weight: .semibold))
+                    Spacer()
+                    Text("\(g.rides.count)회").font(.caption).foregroundColor(.secondary)
+                }
+                HStack(spacing: 12) {
+                    Label(String(format: "평균 %.1f km", g.averageMeters / 1000), systemImage: "ruler")
+                    Label(String(format: "합계 %.0f km", g.totalMeters / 1000), systemImage: "sum")
+                }
+                .font(.caption).foregroundColor(.secondary)
+                if g.bestTime > 0 {
+                    Label("베스트 \(formatDuration(g.bestTime))", systemImage: "stopwatch")
+                        .font(.caption).foregroundColor(Theme.gold)
+                }
             }
-            HStack(spacing: 14) {
-                Label(String(format: "평균 %.1f km", g.averageMeters / 1000), systemImage: "ruler")
-                Label(String(format: "합계 %.0f km", g.totalMeters / 1000), systemImage: "sum")
-            }
-            .font(.caption).foregroundColor(.secondary)
         }
         .padding(.vertical, 2)
     }
@@ -166,15 +186,21 @@ struct RouteGroup: Identifiable {
     var rides: [RideRecord]
     var totalMeters: Double { rides.reduce(0) { $0 + $1.distanceMeters } }
     var averageMeters: Double { rides.isEmpty ? 0 : totalMeters / Double(rides.count) }
+    /// 베스트 타임(가장 빠른 라이딩 시간).
+    var bestTime: TimeInterval { rides.map { $0.duration }.filter { $0 > 0 }.min() ?? 0 }
+    /// 썸네일용 대표 라이딩(트랙 점이 가장 많은 것).
+    var representative: RideRecord? {
+        rides.filter { !$0.track.isEmpty }.max { $0.track.count < $1.track.count }
+    }
 }
 
 enum RouteGrouping {
-    /// 시작 좌표(≈110m)·끝 좌표(≈110m)·거리(1km 버킷)가 같으면 같은 코스로 본다.
-    static func groups(_ records: [RideRecord]) -> [RouteGroup] {
+    /// 시작 좌표·끝 좌표(반경 radiusMeters)·거리(1km 버킷)가 같으면 같은 코스로 본다.
+    static func groups(_ records: [RideRecord], radiusMeters: Double = 250) -> [RouteGroup] {
         var buckets: [String: [RideRecord]] = [:]
         var noGPS: [RideRecord] = []
         for r in records {
-            if let key = signature(r) {
+            if let key = signature(r, radiusMeters: radiusMeters) {
                 buckets[key, default: []].append(r)
             } else {
                 noGPS.append(r)
@@ -191,12 +217,18 @@ enum RouteGrouping {
         return result
     }
 
-    private static func signature(_ r: RideRecord) -> String? {
+    private static func signature(_ r: RideRecord, radiusMeters: Double) -> String? {
         guard let s = r.track.first, let e = r.track.last else { return nil }
-        let sk = String(format: "%.3f,%.3f", s.lat, s.lon)
-        let ek = String(format: "%.3f,%.3f", e.lat, e.lon)
         let dk = Int((r.distanceMeters / 1000).rounded())
-        return "\(sk)|\(ek)|\(dk)km"
+        return "\(cell(s.lat, s.lon, radiusMeters))|\(cell(e.lat, e.lon, radiusMeters))|\(dk)km"
+    }
+
+    /// 좌표를 radius 크기의 격자 셀로 양자화.
+    private static func cell(_ lat: Double, _ lon: Double, _ radius: Double) -> String {
+        let mPerDegLat = 111_320.0
+        let latStep = radius / mPerDegLat
+        let lonStep = radius / max(1, mPerDegLat * cos(lat * .pi / 180))
+        return "\(Int((lat / latStep).rounded())),\(Int((lon / lonStep).rounded()))"
     }
 
     /// 그룹 제목 = 가장 많이 쓰인 라이딩 이름.
@@ -264,5 +296,74 @@ struct RideDetailView: View {
         }
         .frame(maxWidth: .infinity).padding(.vertical, 14)
         .background(Color(white: 0.1), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+/// 코스 대표 경로의 지도 썸네일(MKMapSnapshotter 로 1회 렌더 후 캐시).
+struct RouteThumbnail: View {
+    let coords: [CLLocationCoordinate2D]
+    @State private var image: UIImage?
+
+    var body: some View {
+        ZStack {
+            if let image {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else {
+                RoundedRectangle(cornerRadius: 8).fill(Color(white: 0.15))
+                Image(systemName: "map").font(.system(size: 16)).foregroundColor(.secondary)
+            }
+        }
+        .frame(width: 60, height: 60)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .task(id: coords.count) { await render() }
+    }
+
+    @MainActor private func render() async {
+        guard image == nil, coords.count > 1, let region = boundingRegion(coords) else { return }
+        let pts = downsample(coords, max: 200)
+        let options = MKMapSnapshotter.Options()
+        options.region = region
+        options.size = CGSize(width: 120, height: 120)
+
+        let snapshot: MKMapSnapshotter.Snapshot? = await withCheckedContinuation { cont in
+            MKMapSnapshotter(options: options).start(with: .global(qos: .userInitiated)) { snap, _ in
+                cont.resume(returning: snap)
+            }
+        }
+        guard let snapshot else { return }
+
+        let rendered = UIGraphicsImageRenderer(size: options.size).image { _ in
+            snapshot.image.draw(at: .zero)
+            let path = UIBezierPath()
+            for (i, c) in pts.enumerated() {
+                let p = snapshot.point(for: c)
+                if i == 0 { path.move(to: p) } else { path.addLine(to: p) }
+            }
+            UIColor.systemBlue.setStroke()
+            path.lineWidth = 3
+            path.lineJoinStyle = .round
+            path.stroke()
+        }
+        image = rendered
+    }
+
+    private func downsample(_ c: [CLLocationCoordinate2D], max n: Int) -> [CLLocationCoordinate2D] {
+        guard c.count > n else { return c }
+        let step = Double(c.count) / Double(n)
+        return (0..<n).map { c[Int(Double($0) * step)] }
+    }
+
+    private func boundingRegion(_ c: [CLLocationCoordinate2D]) -> MKCoordinateRegion? {
+        guard let first = c.first else { return nil }
+        var minLat = first.latitude, maxLat = first.latitude
+        var minLon = first.longitude, maxLon = first.longitude
+        for p in c {
+            minLat = min(minLat, p.latitude); maxLat = max(maxLat, p.latitude)
+            minLon = min(minLon, p.longitude); maxLon = max(maxLon, p.longitude)
+        }
+        let center = CLLocationCoordinate2D(latitude: (minLat + maxLat) / 2, longitude: (minLon + maxLon) / 2)
+        let span = MKCoordinateSpan(latitudeDelta: max(0.002, (maxLat - minLat) * 1.3),
+                                    longitudeDelta: max(0.002, (maxLon - minLon) * 1.3))
+        return MKCoordinateRegion(center: center, span: span)
     }
 }
