@@ -26,6 +26,7 @@ final class RideSession: ObservableObject {
     let store = RideStore()
     let watch = WatchSensorManager()   // 애플워치 심박·속도·케이던스
     let health = HealthStore()          // Apple Health 누적 거리 + 폰 단독 워크아웃 저장
+    let calendarLogger = CalendarLogger()   // Done 시 캘린더에 운동 요약 기록
 
     // 표시 단위
     @Published var unit: DistanceUnit = .kilometers
@@ -172,6 +173,8 @@ final class RideSession: ObservableObject {
             if !watchSavedWorkout {
                 health.saveRide(record)
             }
+            // 캘린더에 운동 요약 기록(Cyclemeter 형식).
+            calendarLogger.logRide(record, bikeName: bikeName)
         }
         health.refreshTotals()
         state = .idle

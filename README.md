@@ -33,6 +33,11 @@
   ⚠️ **앱이 센서를 직접 켤 수는 없다** — `HKLiveWorkoutBuilder` 에 SpO2 라이브 타입이 없고, 측정을 강제할
   공개 API 도 없다. 실제 측정은 사용자가 시스템 **'혈중 산소' 앱**을 열거나 watchOS 자동측정이 수행하며,
   손목이 정지해야 하므로 페달링 중엔 잘 안 잡힌다(휴식·신호대기 시 측정). 일부 지역 모델은 혈중 산소 기능이 비활성일 수 있다.
+- **Done(종료) 루틴**: ① 운동을 **Apple 건강**에 HKWorkout 으로 저장(워치 사용 시 워치, 폰 단독이면 폰),
+  ② **iOS 캘린더에 운동 요약 이벤트** 기록(`EventKit`, Cyclemeter 형식) —
+  제목 `"{자전거}, time {라이딩시간}, distance {거리} km"`, 위치=경로명,
+  메모 `Route / Ride Time / Stopped Time / Distance`, 시작·종료=라이딩 시작~종료.
+  기본 캘린더에 추가하며, 캘린더 쓰기 권한(`NSCalendarsWriteOnlyAccessUsageDescription`)이 필요하다.
 - 백그라운드에서도 블루투스·위치 계속 기록(`UIBackgroundModes`).
 
 ### 애플워치 측정 (watchOS 컴패니언 앱)
