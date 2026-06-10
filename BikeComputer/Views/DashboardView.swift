@@ -56,7 +56,7 @@ struct DashboardView: View {
             row {
                 MetricCell(label: "Speed", value: fmt(session.displaySpeed, 2),
                            unit: session.unit.speedLabel, color: Theme.blue, valueSize: 40)
-                MetricCell(label: "Average Speed", value: fmt(session.displayAverageSpeed, 2),
+                MetricCell(label: "Average", value: fmt(session.displayAverageSpeed, 2),
                            unit: session.unit.speedLabel, color: Theme.value, valueSize: 40)
             }
             divider
