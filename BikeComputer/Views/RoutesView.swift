@@ -339,10 +339,7 @@ struct RideDetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                RouteMap(track: record.track.map { $0.clCoordinate },
-                         userLocation: record.track.first?.clCoordinate,
-                         region: .constant(MKCoordinateRegion()),
-                         autoFit: true)
+                StaticRouteMap(track: record.track.map { $0.clCoordinate })
                     .frame(height: 260)
                     .clipShape(RoundedRectangle(cornerRadius: 14))
 

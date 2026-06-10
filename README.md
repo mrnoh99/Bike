@@ -129,11 +129,12 @@ BikeComputerWatch/                  # 애플워치 앱
 
 - 라이딩 거리는 GPS 트랙 기준이며, 누적 거리(이번달/올해/총)는 Apple 건강의 사이클링 거리 합으로 집계.
 - 워치 속도/케이던스는 워치 설정에서 BLE 센서를 OS 에 페어링해야 동작(watchOS 10+).
-- **과거 코스 오버레이**(Map 탭 → "과거 코스"): 코스별 대표 경로를 한 지도에 겹쳐 표시.
-  지도는 **Google 지도(표준 타입)** 사용 — `#if canImport(GoogleMaps)` 로 감싸 SDK·키가 있으면 Google,
-  없으면 **Apple 지도로 폴백**(앱은 항상 빌드됨). 활성화하려면:
+- **지도는 Google 지도(표준 타입)** 사용 — 라이브 Map 탭(`GoogleLiveMap`), 라이딩 상세(`StaticRouteMap`),
+  과거 코스 오버레이(`GoogleRouteMap`) 모두. `#if canImport(GoogleMaps)` 로 감싸 SDK·키가 있으면 Google,
+  없으면 **Apple 지도(MapKit)로 폴백**(앱은 항상 빌드됨). 활성화하려면:
   ① `project.yml` 의 GoogleMaps SPM 의존성 유지(`xcodegen generate`) ② Google Cloud 에서 **Maps SDK for iOS**
   키 발급 ③ `Info.plist` 의 `GMSApiKey` 에 키 입력. 키가 비어 있으면 자동으로 Apple 지도로 표시.
+- **과거 코스 오버레이**(Map 탭 → "과거 코스"): 코스별 대표 경로를 한 지도에 색별로 겹쳐 표시.
 - 랩(구간) 기록 · 사용자 자전거 다중 프로필 미구현. (GPX 내보내기/가져오기·HealthKit 경로·iCloud 동기화는 구현됨)
 - **데이터 가져오기**(More 탭): ① **Apple 건강에서 가져오기** — 건강의 사이클링 워크아웃(거리·시간·평균/최대
   심박·최대 케이던스 + 경로)을 Routes 로 채움(이미 건강에 있을 때 최선). ② **Cyclemeter GPX 가져오기** —

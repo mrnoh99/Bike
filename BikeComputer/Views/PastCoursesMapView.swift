@@ -35,13 +35,20 @@ struct PastCoursesMapView: View {
     }
 }
 
-/// 지도 엔진 선택: GoogleMaps SDK + API 키가 있으면 Google, 아니면 Apple.
+/// Google 지도 사용 가능 여부(SDK + Info.plist GMSApiKey).
+enum GMapsConfig {
+    static var hasKey: Bool {
+        (Bundle.main.object(forInfoDictionaryKey: "GMSApiKey") as? String).map { !$0.isEmpty } ?? false
+    }
+}
+
+/// 여러 코스 오버레이: Google(가능 시) 또는 Apple.
 struct PastCoursesMap: View {
     let tracks: [[CLLocationCoordinate2D]]
 
     var body: some View {
         #if canImport(GoogleMaps)
-        if hasGoogleKey {
+        if GMapsConfig.hasKey {
             GoogleRouteMap(tracks: tracks)
         } else {
             MultiRouteAppleMap(tracks: tracks)
@@ -50,9 +57,27 @@ struct PastCoursesMap: View {
         MultiRouteAppleMap(tracks: tracks)
         #endif
     }
+}
 
-    private var hasGoogleKey: Bool {
-        (Bundle.main.object(forInfoDictionaryKey: "GMSApiKey") as? String).map { !$0.isEmpty } ?? false
+/// 단일 경로 정적 지도(라이딩 상세용): Google(가능 시) 또는 Apple(autoFit).
+struct StaticRouteMap: View {
+    let track: [CLLocationCoordinate2D]
+
+    var body: some View {
+        #if canImport(GoogleMaps)
+        if GMapsConfig.hasKey {
+            GoogleRouteMap(tracks: [track])
+        } else {
+            appleMap
+        }
+        #else
+        appleMap
+        #endif
+    }
+
+    private var appleMap: some View {
+        RouteMap(track: track, userLocation: track.first,
+                 region: .constant(MKCoordinateRegion()), autoFit: true)
     }
 }
 

@@ -1,5 +1,8 @@
 import SwiftUI
 import MapKit
+#if canImport(GoogleMaps)
+import GoogleMaps
+#endif
 
 /// Map 탭 — 현재 위치 + 진행 중인 라이딩 경로(폴리라인).
 struct MapTabView: View {
@@ -11,9 +14,9 @@ struct MapTabView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            RouteMap(track: session.location.track,
-                     userLocation: session.location.lastLocation?.coordinate,
-                     region: $region)
+            LiveMap(track: session.location.track,
+                    userLocation: session.location.lastLocation?.coordinate,
+                    region: $region)
                 .ignoresSafeArea(edges: .top)
 
             // 상단 요약 바
@@ -97,3 +100,65 @@ struct RouteMap: UIViewRepresentable {
         }
     }
 }
+
+/// 라이브 지도: Google(가능 시) 또는 Apple(`RouteMap`).
+struct LiveMap: View {
+    let track: [CLLocationCoordinate2D]
+    let userLocation: CLLocationCoordinate2D?
+    @Binding var region: MKCoordinateRegion
+
+    var body: some View {
+        #if canImport(GoogleMaps)
+        if GMapsConfig.hasKey {
+            GoogleLiveMap(track: track, userLocation: userLocation)
+        } else {
+            RouteMap(track: track, userLocation: userLocation, region: $region)
+        }
+        #else
+        RouteMap(track: track, userLocation: userLocation, region: $region)
+        #endif
+    }
+}
+
+#if canImport(GoogleMaps)
+/// Google 지도(표준 타입) 라이브 추적 — 경로 폴리라인 + 사용자 추적(직접 조작 전까지).
+struct GoogleLiveMap: UIViewRepresentable {
+    let track: [CLLocationCoordinate2D]
+    let userLocation: CLLocationCoordinate2D?
+
+    func makeUIView(context: Context) -> GMSMapView {
+        let map = GMSMapView()
+        map.mapType = .normal
+        map.isMyLocationEnabled = true
+        map.settings.myLocationButton = true
+        map.settings.compassButton = true
+        map.delegate = context.coordinator
+        return map
+    }
+
+    func updateUIView(_ map: GMSMapView, context: Context) {
+        map.clear()
+        if track.count > 1 {
+            let path = GMSMutablePath()
+            for c in track { path.add(c) }
+            let line = GMSPolyline(path: path)
+            line.strokeColor = .systemBlue
+            line.strokeWidth = 5
+            line.map = map
+        }
+        if let loc = userLocation, !context.coordinator.userMoved {
+            map.animate(toLocation: loc)
+            if map.camera.zoom < 14 { map.animate(toZoom: 16) }
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    final class Coordinator: NSObject, GMSMapViewDelegate {
+        var userMoved = false
+        func mapView(_ mapView: GMSMapView, willMove gesture: Bool) {
+            if gesture { userMoved = true }   // 사용자가 직접 움직이면 자동 추적 중단
+        }
+    }
+}
+#endif
