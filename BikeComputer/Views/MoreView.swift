@@ -15,7 +15,21 @@ struct MoreView: View {
                 }
                 Section("라이딩") {
                     HStack { Text("라이딩 이름"); Spacer(); TextField("", text: $session.routeName).multilineTextAlignment(.trailing) }
-                    HStack { Text("자전거"); Spacer(); TextField("", text: $session.bikeName).multilineTextAlignment(.trailing) }
+                }
+                Section("자전거 종류") {
+                    Menu {
+                        ForEach(RideSession.bikePresets, id: \.self) { name in
+                            Button(name) { session.bikeName = name }
+                        }
+                    } label: {
+                        HStack {
+                            Text("종류")
+                            Spacer()
+                            Text(session.bikeName).foregroundColor(.secondary)
+                            Image(systemName: "chevron.up.chevron.down").foregroundColor(.secondary)
+                        }
+                    }
+                    TextField("직접 입력", text: $session.bikeName)
                 }
                 Section("누적 통계") {
                     statRow("이번 달", session.thisMonthDistance)

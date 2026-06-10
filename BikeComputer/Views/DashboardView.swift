@@ -22,12 +22,12 @@ struct DashboardView: View {
         .sheet(isPresented: $showSettings) { settingsSheet }
     }
 
-    // 상단 라벨 칩 두 개 (라이딩 이름 / 자전거 이름)
+    // 상단 라벨 칩 (라이딩 이름 / 자전거 종류 풀다운)
     private var header: some View {
         HStack {
             chip(session.routeName)
             Spacer()
-            chip(session.bikeName)
+            bikeMenu
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
@@ -41,6 +41,29 @@ struct DashboardView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 7)
             .background(Capsule().fill(Color(white: 0.14)))
+    }
+
+    // 자전거 종류 풀다운(프리셋 3종 + 직접 입력)
+    private var bikeMenu: some View {
+        Menu {
+            ForEach(RideSession.bikePresets, id: \.self) { name in
+                Button(name) { session.bikeName = name }
+            }
+            Divider()
+            Button("직접 입력…") { showSettings = true }
+        } label: {
+            HStack(spacing: 4) {
+                Text(session.bikeName)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.7))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background(Capsule().fill(Color(white: 0.14)))
+        }
     }
 
     // 2열 메트릭 그리드
@@ -198,7 +221,21 @@ struct DashboardView: View {
             Form {
                 Section("이름") {
                     TextField("라이딩 이름", text: $session.routeName)
-                    TextField("자전거 이름", text: $session.bikeName)
+                }
+                Section("자전거 종류") {
+                    Menu {
+                        ForEach(RideSession.bikePresets, id: \.self) { name in
+                            Button(name) { session.bikeName = name }
+                        }
+                    } label: {
+                        HStack {
+                            Text("종류 선택")
+                            Spacer()
+                            Text(session.bikeName).foregroundColor(.secondary)
+                            Image(systemName: "chevron.up.chevron.down").foregroundColor(.secondary)
+                        }
+                    }
+                    TextField("직접 입력", text: $session.bikeName)
                 }
                 Section("단위") {
                     Picker("거리 단위", selection: $session.unit) {
