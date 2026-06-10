@@ -45,6 +45,23 @@ struct DashboardView: View {
         } message: {
             Text("새 코스를 만들어 목록에 추가합니다.")
         }
+        // 10분 미만 라이딩: 저장/삭제 선택
+        .alert("10분 미만 라이딩", isPresented: Binding(
+            get: { session.pendingShortRide != nil },
+            set: { _ in })) {
+            Button("저장") { session.savePendingRide() }
+            Button("삭제", role: .destructive) { session.discardPendingRide() }
+        } message: {
+            Text("이 라이딩은 10분 미만입니다. 건강·캘린더·파일에 저장할까요?")
+        }
+        // 저장 완료 확인(건강·캘린더·파일 3가지)
+        .alert("저장 완료", isPresented: Binding(
+            get: { session.saveSummary != nil },
+            set: { if !$0 { session.saveSummary = nil } })) {
+            Button("확인") { session.saveSummary = nil }
+        } message: {
+            Text(session.saveSummary ?? "")
+        }
     }
 
     // 상단 라벨 칩 (코스 풀다운 / 자전거 종류 풀다운)

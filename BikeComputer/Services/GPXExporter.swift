@@ -6,8 +6,12 @@ import Foundation
 enum GPXExporter {
 
     /// 라이딩 1건을 GPX 로 저장한다. (iCloud 해석이 느릴 수 있어 백그라운드에서 수행)
-    static func export(_ record: RideRecord) {
-        guard !record.track.isEmpty else { return }
+    /// completion 은 저장된 파일 URL(실패/경로없음 시 nil)을 메인 큐로 돌려준다.
+    static func export(_ record: RideRecord, completion: ((URL?) -> Void)? = nil) {
+        guard !record.track.isEmpty else {
+            DispatchQueue.main.async { completion?(nil) }
+            return
+        }
         let xml = makeGPX(record)
         let fileName = "\(fileStem(record)).gpx"
         DispatchQueue.global(qos: .utility).async {
@@ -16,9 +20,13 @@ enum GPXExporter {
             let url = dir.appendingPathComponent(fileName)
             let coordinator = NSFileCoordinator()
             var err: NSError?
+            var ok = false
             coordinator.coordinate(writingItemAt: url, options: .forReplacing, error: &err) { u in
-                try? xml.data(using: .utf8)?.write(to: u, options: .atomic)
+                if let data = xml.data(using: .utf8) {
+                    do { try data.write(to: u, options: .atomic); ok = true } catch { ok = false }
+                }
             }
+            DispatchQueue.main.async { completion?(ok ? url : nil) }
         }
     }
 

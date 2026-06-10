@@ -38,6 +38,11 @@ final class RideSession: ObservableObject {
     /// GPX 가져오기 진행/결과 표시.
     @Published var importStatus: String?
 
+    /// 10분 미만 라이딩: 저장/삭제 결정 대기 중인 기록.
+    @Published var pendingShortRide: RideRecord?
+    /// 저장(건강·캘린더·파일) 완료 요약 — 확인 알림 표시용.
+    @Published var saveSummary: String?
+
     /// Apple 건강의 사이클링 워크아웃(경로·심박 포함)을 Routes 로 가져온다.
     func importFromHealth() {
         importStatus = "건강에서 가져오는 중…"
@@ -227,9 +232,19 @@ final class RideSession: ObservableObject {
         location.stopRecording()
         watch.stopWatchWorkout()   // 워치 워크아웃 세션 종료(저장은 폰이 담당)
 
-        let avgSpeed = movingSeconds > 1 ? distanceMeters / movingSeconds : 0
+        let record = makeRecord(startedAt: started)
+        state = .idle
 
-        let record = RideRecord(
+        if record.duration >= 600 {     // 10분 이상 → 자동 저장
+            performSave(record)
+        } else {                         // 10분 미만 → 저장/삭제 선택지
+            pendingShortRide = record
+        }
+    }
+
+    private func makeRecord(startedAt started: Date) -> RideRecord {
+        let avgSpeed = movingSeconds > 1 ? distanceMeters / movingSeconds : 0
+        return RideRecord(
             name: routeName,
             startedAt: started,
             duration: rideSeconds,
@@ -240,17 +255,37 @@ final class RideSession: ObservableObject {
             maxHeartRate: maxHeartRate,
             avgHeartRate: avgHeartRate,
             maxCadence: maxCadence,
-            track: buildTrackPoints()
-        )
-        // 의미 있는 라이딩만 저장 (10초 미만·0거리 제외).
-        if distanceMeters > 5 || rideSeconds > 10 {
-            store.add(record)              // 로컬/iCloud 상세 기록(목록·상세)
-            health.saveRide(record)        // 건강 앱 워크아웃(거리 + GPS 경로)
-            calendarLogger.logRide(record, bikeName: bikeName)   // 캘린더 요약
-            GPXExporter.export(record)     // Files 앱 GPX 폴더로 내보내기
+            track: buildTrackPoints())
+    }
+
+    /// 10분 미만 라이딩: 저장 선택.
+    func savePendingRide() {
+        guard let record = pendingShortRide else { return }
+        pendingShortRide = nil
+        performSave(record)
+    }
+
+    /// 10분 미만 라이딩: 삭제(건강·캘린더·파일 저장 안 함).
+    func discardPendingRide() {
+        pendingShortRide = nil
+    }
+
+    /// 건강·캘린더·파일 3가지 저장을 수행하고, 모두 끝나면 완료 요약을 발행한다.
+    private func performSave(_ record: RideRecord) {
+        store.add(record)   // 앱 기록(목록·상세)
+        let group = DispatchGroup()
+        var healthOK = false, calendarOK = false, fileOK = false
+        group.enter()
+        health.saveRide(record) { ok in healthOK = ok; group.leave() }
+        group.enter()
+        calendarLogger.logRide(record, bikeName: bikeName) { ok in calendarOK = ok; group.leave() }
+        group.enter()
+        GPXExporter.export(record) { url in fileOK = (url != nil); group.leave() }
+        group.notify(queue: .main) { [weak self] in
+            self?.health.refreshTotals()
+            func mark(_ ok: Bool) -> String { ok ? "✓" : "✗" }
+            self?.saveSummary = "건강 \(mark(healthOK))    캘린더 \(mark(calendarOK))    파일 \(mark(fileOK))"
         }
-        health.refreshTotals()
-        state = .idle
     }
 
     // MARK: - 표시용 계산값 (단위 변환)

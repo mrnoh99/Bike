@@ -13,10 +13,11 @@ final class CalendarLogger {
 
     /// 라이딩 기록을 'bike' 캘린더(iCloud 우선)에 추가.
     /// 캘린더를 이름으로 찾으려면 목록 조회가 필요하므로 전체 접근 권한을 요청한다.
-    func logRide(_ record: RideRecord, bikeName: String) {
+    func logRide(_ record: RideRecord, bikeName: String, completion: ((Bool) -> Void)? = nil) {
         store.requestFullAccessToEvents { [weak self] granted, _ in
-            guard granted, let self else { return }
-            self.createEvent(record, bikeName: bikeName)
+            guard granted, let self else { completion?(false); return }
+            let ok = self.createEvent(record, bikeName: bikeName)
+            completion?(ok)
         }
     }
 
@@ -55,8 +56,9 @@ final class CalendarLogger {
             ?? store.defaultCalendarForNewEvents?.source
     }
 
-    private func createEvent(_ record: RideRecord, bikeName: String) {
-        guard let calendar = targetCalendar() else { return }
+    @discardableResult
+    private func createEvent(_ record: RideRecord, bikeName: String) -> Bool {
+        guard let calendar = targetCalendar() else { return false }
         let km = record.distanceMeters / 1000.0
         let kmText = String(format: "%.2f", km)
         let rideTime = formatDuration(record.duration)                 // 예) 1:05:03
@@ -75,6 +77,11 @@ final class CalendarLogger {
         Distance: \(kmText) km
         """
         event.calendar = calendar
-        try? store.save(event, span: .thisEvent)
+        do {
+            try store.save(event, span: .thisEvent)
+            return true
+        } catch {
+            return false
+        }
     }
 }

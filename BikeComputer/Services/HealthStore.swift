@@ -126,8 +126,8 @@ final class HealthStore: ObservableObject {
 
     /// 라이딩을 건강 앱에 사이클링 워크아웃으로 저장한다(거리 + GPS 경로).
     /// 심박은 워치 워크아웃 세션 동안 시스템이 HealthKit 에 기록하므로 별도 추가하지 않는다.
-    func saveRide(_ record: RideRecord) {
-        guard HKHealthStore.isHealthDataAvailable() else { return }
+    func saveRide(_ record: RideRecord, completion: ((Bool) -> Void)? = nil) {
+        guard HKHealthStore.isHealthDataAvailable() else { completion?(false); return }
         let config = HKWorkoutConfiguration()
         config.activityType = .cycling
         config.locationType = .outdoor
@@ -137,12 +137,12 @@ final class HealthStore: ObservableObject {
         let end = start.addingTimeInterval(record.totalElapsed)
 
         builder.beginCollection(withStart: start) { [weak self] ok, _ in
-            guard ok else { return }
+            guard ok else { completion?(false); return }
             let finish = {
                 builder.endCollection(withEnd: end) { _, _ in
                     builder.finishWorkout { workout, _ in
                         if let workout { self?.saveRoute(record, to: workout) }
-                        DispatchQueue.main.async { self?.refreshTotals() }
+                        DispatchQueue.main.async { self?.refreshTotals(); completion?(workout != nil) }
                     }
                 }
             }
