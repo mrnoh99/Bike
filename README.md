@@ -114,7 +114,8 @@ BikeComputer/                       # 아이폰 앱
               GPXImporter.swift           # Cyclemeter 등 GPX 일괄 가져오기(파일/폴더)
               HealthWorkoutImporter.swift # Apple 건강 사이클링 워크아웃(경로·심박) 가져오기
               RideSession.swift           # 메인 뷰모델(상태머신·소스우선순위·통계·저장)
-  Views/      RootTabView · DashboardView · MapTabView · RoutesView
+  Views/      ContentView(단일 화면) · DashboardView(⚙️ 메뉴) · MapTabView(+LiveMap/GoogleLiveMap)
+              RoutesView(정렬·코스별·상세) · PastCoursesMapView(과거 코스 오버레이)
               DevicesView · MoreView · Components/MetricCell
   Assets.xcassets
 
