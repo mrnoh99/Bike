@@ -10,16 +10,26 @@ import EventKit
 final class CalendarLogger {
     private let store = EKEventStore()
 
-    /// 라이딩 기록을 캘린더에 추가. (쓰기 전용 권한)
+    /// 라이딩 기록을 'bike' 캘린더(iCloud 우선)에 추가.
+    /// 캘린더를 이름으로 찾으려면 목록 조회가 필요하므로 전체 접근 권한을 요청한다.
     func logRide(_ record: RideRecord, bikeName: String) {
-        store.requestWriteOnlyAccessToEvents { [weak self] granted, _ in
+        store.requestFullAccessToEvents { [weak self] granted, _ in
             guard granted, let self else { return }
             self.createEvent(record, bikeName: bikeName)
         }
     }
 
+    /// 제목이 "bike" 인 캘린더(iCloud/CalDAV 우선). 없으면 기본 캘린더.
+    private func targetCalendar() -> EKCalendar? {
+        let writable = store.calendars(for: .event).filter { $0.allowsContentModifications }
+        let named = writable.filter { $0.title.caseInsensitiveCompare("bike") == .orderedSame }
+        return named.first { $0.source.sourceType == .calDAV }   // iCloud 우선
+            ?? named.first
+            ?? store.defaultCalendarForNewEvents
+    }
+
     private func createEvent(_ record: RideRecord, bikeName: String) {
-        guard let calendar = store.defaultCalendarForNewEvents else { return }
+        guard let calendar = targetCalendar() else { return }
         let km = record.distanceMeters / 1000.0
         let kmText = String(format: "%.2f", km)
         let rideTime = formatDuration(record.duration)                 // 예) 1:05:03

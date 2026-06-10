@@ -67,10 +67,12 @@
 	<string>애플워치로 측정한 심박수를 라이딩 화면에 표시하기 위해 사용합니다.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>라이딩 운동(워크아웃)을 건강 앱에 기록하기 위해 사용합니다.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>라이딩 요약을 'bike' 캘린더에 기록하기 위해 캘린더 목록 확인·이벤트 추가에 사용합니다.</string>
 	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
 	<string>라이딩을 마치면 운동 요약(시간·거리)을 캘린더에 기록하기 위해 사용합니다.</string>
 	<key>NSCalendarsUsageDescription</key>
-	<string>라이딩을 마치면 운동 요약(시간·거리)을 캘린더에 기록하기 위해 사용합니다.</string>
+	<string>라이딩 요약을 'bike' 캘린더에 기록하기 위해 사용합니다.</string>
 
 	<!-- 백그라운드에서 센서·위치 계속 기록 -->
 	<key>UIBackgroundModes</key>

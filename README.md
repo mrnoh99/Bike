@@ -37,7 +37,9 @@
   1. **Apple 건강(HKWorkout)** 저장 — 폰이 거리 + **GPS 경로(`HKWorkoutRoute`)** 까지 첨부(건강 앱 지도 표시).
      워치는 워크아웃 세션만 종료(저장은 폰이 담당 → 중복 방지). 심박은 세션 동안 시스템이 기록.
   2. **iOS 캘린더** 요약 이벤트(`EventKit`, Cyclemeter 형식) — 제목 `"{자전거}, time {시간}, distance {거리} km"`,
-     위치=경로명, 메모 `Route / Ride Time / Stopped Time / Distance`. (`NSCalendarsWriteOnlyAccessUsageDescription` 필요)
+     위치=경로명, 메모 `Route / Ride Time / Stopped Time / Distance`.
+     **제목이 `bike` 인 캘린더(iCloud/CalDAV 우선)** 에 기록(없으면 기본 캘린더).
+     이름으로 캘린더를 찾으므로 **전체 접근**(`requestFullAccessToEvents` / `NSCalendarsFullAccessUsageDescription`) 필요.
   3. **GPX 내보내기** — 경로를 `.gpx` 로 저장. 지점별 **고도(ele)·시각·심박·속도**
      (Garmin `gpxtpx:TrackPointExtension`) 포함. 위치: **iCloud Drive > BikeCom > GPX**
      (iCloud 미사용 시 로컬 Files 앱 > 나의 iPhone > Bike > GPX).
