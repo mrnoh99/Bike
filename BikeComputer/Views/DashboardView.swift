@@ -4,6 +4,8 @@ import SwiftUI
 struct DashboardView: View {
     @EnvironmentObject var session: RideSession
     @State private var showSettings = false
+    @State private var showAddCourse = false
+    @State private var newCourseName = ""
 
     private let clockFormatter: DateFormatter = {
         let f = DateFormatter(); f.dateFormat = "HH:mm:ss"; return f
@@ -20,12 +22,19 @@ struct DashboardView: View {
         }
         .background(Theme.background.ignoresSafeArea())
         .sheet(isPresented: $showSettings) { settingsSheet }
+        .alert("코스 추가", isPresented: $showAddCourse) {
+            TextField("코스 이름 (예: 한강 라이딩)", text: $newCourseName)
+            Button("추가") { session.addCourse(newCourseName) }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text("새 코스를 만들어 목록에 추가합니다.")
+        }
     }
 
-    // 상단 라벨 칩 (라이딩 이름 / 자전거 종류 풀다운)
+    // 상단 라벨 칩 (코스 풀다운 / 자전거 종류 풀다운)
     private var header: some View {
         HStack {
-            chip(session.routeName)
+            courseMenu
             Spacer()
             bikeMenu
         }
@@ -34,13 +43,32 @@ struct DashboardView: View {
         .padding(.bottom, 4)
     }
 
-    private func chip(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundColor(.white)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 7)
-            .background(Capsule().fill(Color(white: 0.14)))
+    // 풀다운 칩 모양(텍스트 + ⌄)
+    private func pulldownChip(_ text: String) -> some View {
+        HStack(spacing: 4) {
+            Text(text)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.white)
+            Image(systemName: "chevron.down")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.white.opacity(0.7))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 7)
+        .background(Capsule().fill(Color(white: 0.14)))
+    }
+
+    // 코스 풀다운(출근/퇴근 등 + 코스 추가)
+    private var courseMenu: some View {
+        Menu {
+            ForEach(session.courses, id: \.self) { course in
+                Button(course) { session.routeName = course }
+            }
+            Divider()
+            Button("코스 추가…", systemImage: "plus") { newCourseName = ""; showAddCourse = true }
+        } label: {
+            pulldownChip(session.routeName)
+        }
     }
 
     // 자전거 종류 풀다운(프리셋 3종 + 직접 입력)
@@ -52,17 +80,7 @@ struct DashboardView: View {
             Divider()
             Button("직접 입력…") { showSettings = true }
         } label: {
-            HStack(spacing: 4) {
-                Text(session.bikeName)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.7))
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 7)
-            .background(Capsule().fill(Color(white: 0.14)))
+            pulldownChip(session.bikeName)
         }
     }
 
@@ -221,6 +239,23 @@ struct DashboardView: View {
             Form {
                 Section("이름") {
                     TextField("라이딩 이름", text: $session.routeName)
+                }
+                Section("코스") {
+                    ForEach(session.courses, id: \.self) { course in
+                        Button {
+                            session.routeName = course
+                        } label: {
+                            HStack {
+                                Text(course).foregroundColor(.primary)
+                                Spacer()
+                                if session.routeName == course {
+                                    Image(systemName: "checkmark").foregroundColor(Theme.gold)
+                                }
+                            }
+                        }
+                    }
+                    .onDelete { session.removeCourse(at: $0) }
+                    Button("코스 추가…", systemImage: "plus") { newCourseName = ""; showAddCourse = true }
                 }
                 Section("자전거 종류") {
                     Menu {

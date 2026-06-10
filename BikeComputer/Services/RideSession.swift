@@ -38,6 +38,26 @@ final class RideSession: ObservableObject {
     @Published var routeName: String = "1.라이딩"
     @Published var bikeName: String = "내 자전거"
 
+    /// 코스(경로) 목록 — 기본 출근/퇴근, 사용자가 만들어 추가·삭제. UserDefaults 영속.
+    @Published var courses: [String] = UserDefaults.standard.stringArray(forKey: "bike.courses") ?? ["출근", "퇴근"]
+
+    /// 코스를 추가(중복 제외)하고 현재 코스로 선택.
+    func addCourse(_ name: String) {
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !n.isEmpty else { return }
+        if !courses.contains(n) { courses.append(n); persistCourses() }
+        routeName = n
+    }
+
+    func removeCourse(at offsets: IndexSet) {
+        courses.remove(atOffsets: offsets)
+        persistCourses()
+    }
+
+    private func persistCourses() {
+        UserDefaults.standard.set(courses, forKey: "bike.courses")
+    }
+
     // 상태
     @Published private(set) var state: RideState = .idle
     @Published private(set) var clock: Date = Date()
