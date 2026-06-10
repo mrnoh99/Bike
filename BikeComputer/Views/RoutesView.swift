@@ -1,6 +1,7 @@
 import SwiftUI
 import MapKit
 import UIKit
+import Charts
 
 /// 라이딩 목록 정렬 기준.
 enum RideSort: String, CaseIterable, Identifiable {
@@ -133,8 +134,9 @@ struct RoutesView: View {
         HStack(spacing: 12) {
             RouteThumbnail(coords: (g.representative?.track ?? []).map { $0.clCoordinate })
             VStack(alignment: .leading, spacing: 4) {
-                HStack {
+                HStack(spacing: 6) {
                     Text(g.title).font(.system(size: 16, weight: .semibold))
+                    if let label = g.commuteLabel { commuteChip(label) }
                     Spacer()
                     Text("\(g.rides.count)회").font(.caption).foregroundColor(.secondary)
                 }
@@ -143,38 +145,114 @@ struct RoutesView: View {
                     Label(String(format: "합계 %.0f km", g.totalMeters / 1000), systemImage: "sum")
                 }
                 .font(.caption).foregroundColor(.secondary)
-                if g.bestTime > 0 {
-                    Label("베스트 \(formatDuration(g.bestTime))", systemImage: "stopwatch")
-                        .font(.caption).foregroundColor(Theme.gold)
+                HStack(spacing: 12) {
+                    if g.bestTime > 0 {
+                        Label("베스트 \(formatDuration(g.bestTime))", systemImage: "stopwatch")
+                            .foregroundColor(Theme.gold)
+                    }
+                    if g.bestAvgSpeedMps > 0 {
+                        Label(String(format: "최고평속 %.1f km/h", g.bestAvgSpeedMps * 3.6), systemImage: "speedometer")
+                            .foregroundColor(Theme.blue)
+                    }
                 }
+                .font(.caption)
             }
         }
         .padding(.vertical, 2)
     }
+
+    private func commuteChip(_ label: String) -> some View {
+        Text(label)
+            .font(.system(size: 11, weight: .bold))
+            .foregroundColor(.black)
+            .padding(.horizontal, 7).padding(.vertical, 2)
+            .background(Capsule().fill(label == "출근" ? Theme.gold : Theme.purple))
+    }
 }
 
-/// 한 코스에 묶인 라이딩 목록.
+/// 추세 그래프 지표.
+enum TrendMetric: String, CaseIterable, Identifiable {
+    case speed = "평균 속도"
+    case time = "라이딩 시간"
+    var id: String { rawValue }
+}
+
+/// 한 코스에 묶인 라이딩 목록 + 추세 그래프.
 struct RouteGroupView: View {
     @EnvironmentObject var session: RideSession
     let group: RouteGroup
     let sort: RideSort
+    @State private var metric: TrendMetric = .speed
+
+    private var chrono: [RideRecord] { group.rides.sorted { $0.startedAt < $1.startedAt } }
 
     var body: some View {
         List {
-            ForEach(sort.sorted(group.rides)) { record in
-                NavigationLink {
-                    RideDetailView(record: record, unit: session.unit)
-                } label: {
-                    RideRow(record: record, unit: session.unit)
+            Section {
+                Picker("지표", selection: $metric) {
+                    ForEach(TrendMetric.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                trendChart.frame(height: 170)
+            } header: {
+                Text("추세 (시간순)")
+            }
+
+            Section("요약") {
+                summaryRow("라이딩 수", "\(group.rides.count)회")
+                summaryRow("합계 거리", String(format: "%.0f km", group.totalMeters / 1000))
+                summaryRow("평균 거리", String(format: "%.1f km", group.averageMeters / 1000))
+                if group.bestTime > 0 {
+                    summaryRow("베스트 타임", formatDuration(group.bestTime), Theme.gold)
+                }
+                if group.bestAvgSpeedMps > 0 {
+                    summaryRow("최고 평속", String(format: "%.1f km/h", group.bestAvgSpeedMps * 3.6), Theme.blue)
                 }
             }
-            .onDelete { idx in
-                let arr = sort.sorted(group.rides)
-                idx.map { arr[$0] }.forEach { session.store.delete($0) }
+
+            Section("라이딩") {
+                ForEach(sort.sorted(group.rides)) { record in
+                    NavigationLink {
+                        RideDetailView(record: record, unit: session.unit)
+                    } label: {
+                        HStack {
+                            RideRow(record: record, unit: session.unit)
+                            if record.id == group.bestAvgSpeedRideID {
+                                Image(systemName: "star.fill").foregroundColor(Theme.blue).font(.caption)
+                            }
+                        }
+                    }
+                }
+                .onDelete { idx in
+                    let arr = sort.sorted(group.rides)
+                    idx.map { arr[$0] }.forEach { session.store.delete($0) }
+                }
             }
         }
-        .navigationTitle(group.title)
+        .navigationTitle(navTitle)
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var navTitle: String {
+        if let label = group.commuteLabel, !group.title.contains(label) {
+            return "\(group.title) · \(label)"
+        }
+        return group.title
+    }
+
+    @ViewBuilder private var trendChart: some View {
+        Chart(chrono) { r in
+            let y = metric == .speed ? r.averageSpeedMps * 3.6 : r.duration / 60
+            LineMark(x: .value("날짜", r.startedAt), y: .value(metric.rawValue, y))
+                .foregroundStyle(metric == .speed ? Theme.blue : Theme.gold)
+            PointMark(x: .value("날짜", r.startedAt), y: .value(metric.rawValue, y))
+                .foregroundStyle(metric == .speed ? Theme.blue : Theme.gold)
+        }
+        .chartYAxisLabel(metric == .speed ? "km/h" : "분")
+    }
+
+    private func summaryRow(_ label: String, _ value: String, _ color: Color = .primary) -> some View {
+        HStack { Text(label); Spacer(); Text(value).foregroundColor(color) }
     }
 }
 
@@ -188,9 +266,22 @@ struct RouteGroup: Identifiable {
     var averageMeters: Double { rides.isEmpty ? 0 : totalMeters / Double(rides.count) }
     /// 베스트 타임(가장 빠른 라이딩 시간).
     var bestTime: TimeInterval { rides.map { $0.duration }.filter { $0 > 0 }.min() ?? 0 }
+    /// 평균 속도 기준 베스트(가장 빠른 평속, m/s)와 그 라이딩.
+    var bestAvgSpeedMps: Double { rides.map { $0.averageSpeedMps }.max() ?? 0 }
+    var bestAvgSpeedRideID: RideRecord.ID? { rides.max { $0.averageSpeedMps < $1.averageSpeedMps }?.id }
     /// 썸네일용 대표 라이딩(트랙 점이 가장 많은 것).
     var representative: RideRecord? {
         rides.filter { !$0.track.isEmpty }.max { $0.track.count < $1.track.count }
+    }
+    /// 시간대 기반 자동 라벨(출근/퇴근). 강한 다수일 때만.
+    var commuteLabel: String? {
+        let hours = rides.compactMap { Calendar.current.dateComponents([.hour], from: $0.startedAt).hour }
+        guard !hours.isEmpty else { return nil }
+        let morning = hours.filter { (4...10).contains($0) }.count
+        let evening = hours.filter { (16...22).contains($0) }.count
+        if morning > evening, morning * 2 >= hours.count { return "출근" }
+        if evening > morning, evening * 2 >= hours.count { return "퇴근" }
+        return nil
     }
 }
 
