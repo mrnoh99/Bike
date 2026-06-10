@@ -49,10 +49,11 @@ final class WatchSensorManager: NSObject, ObservableObject {
                 read.insert(t); share.insert(t)
             }
         }
-        // 산소포화도(SpO2)는 읽기 전용 — 워치가 백그라운드로 기록한 최근 값을 표시.
-        if let spo2 = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation) {
-            read.insert(spo2)
+        // 읽기 전용: SpO2(최근값 표시) + 케이던스·경로(건강에서 가져오기).
+        for id in [HKQuantityTypeIdentifier.oxygenSaturation, .cyclingCadence] {
+            if let t = HKQuantityType.quantityType(forIdentifier: id) { read.insert(t) }
         }
+        read.insert(HKSeriesType.workoutRoute())
         healthStore.requestAuthorization(toShare: share, read: read) { [weak self] ok, _ in
             DispatchQueue.main.async { self?.authorized = ok }
         }

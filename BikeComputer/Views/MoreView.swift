@@ -72,6 +72,12 @@ struct MoreView: View {
                 Section {
                     Button {
                         session.importStatus = nil
+                        session.importFromHealth()
+                    } label: {
+                        Label("Apple 건강에서 가져오기", systemImage: "heart.text.square")
+                    }
+                    Button {
+                        session.importStatus = nil
                         showImporter = true
                     } label: {
                         Label("Cyclemeter GPX 가져오기", systemImage: "square.and.arrow.down")
@@ -82,7 +88,7 @@ struct MoreView: View {
                 } header: {
                     Text("데이터 가져오기")
                 } footer: {
-                    Text("Cyclemeter 에서 라이딩을 GPX 로 내보낸 뒤, 여러 .gpx 파일이나 폴더를 통째로 선택하면 일괄로 가져옵니다(경로·심박·케이던스·속도 포함). 같은 시작 시각의 기록은 중복 제외됩니다.")
+                    Text("이미 Apple 건강에 있는 사이클링 운동은 '건강에서 가져오기'로 경로·심박과 함께 Routes 에 채웁니다. 건강에 없거나 경로가 빠진 오래된 기록은 Cyclemeter 에서 GPX 로 내보낸 뒤 여러 파일/폴더를 선택해 가져오세요. 같은 시작 시각은 중복 제외됩니다.")
                 }
                 Section {
                     HStack { Text("버전"); Spacer(); Text("1.0").foregroundColor(.secondary) }

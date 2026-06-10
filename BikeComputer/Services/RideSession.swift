@@ -27,6 +27,7 @@ final class RideSession: ObservableObject {
     let watch = WatchSensorManager()   // 애플워치 심박·속도·케이던스
     let health = HealthStore()          // Apple Health 누적 거리 + 폰 단독 워크아웃 저장
     let calendarLogger = CalendarLogger()   // Done 시 캘린더에 운동 요약 기록
+    let healthImporter = HealthWorkoutImporter()   // 건강의 사이클링 워크아웃 가져오기
 
     /// 자전거 종류 프리셋(풀다운). 그 외에는 직접 입력.
     static let bikePresets = ["Yeti", "Wilier", "SantaCruz"]
@@ -36,6 +37,18 @@ final class RideSession: ObservableObject {
 
     /// GPX 가져오기 진행/결과 표시.
     @Published var importStatus: String?
+
+    /// Apple 건강의 사이클링 워크아웃(경로·심박 포함)을 Routes 로 가져온다.
+    func importFromHealth() {
+        importStatus = "건강에서 가져오는 중…"
+        healthImporter.importCyclingWorkouts { [weak self] records in
+            guard let self else { return }
+            let existing = Set(self.store.records.map { Int($0.startedAt.timeIntervalSince1970) })
+            let fresh = records.filter { !existing.contains(Int($0.startedAt.timeIntervalSince1970)) }
+            self.store.addMany(fresh)
+            self.importStatus = "건강에서 가져오기 완료: \(fresh.count)개 추가 (워크아웃 \(records.count)개)"
+        }
+    }
 
     /// 선택한 GPX 파일/폴더(들)에서 라이딩을 일괄 가져온다(Cyclemeter 마이그레이션).
     func importGPX(from urls: [URL]) {
