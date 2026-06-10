@@ -1,9 +1,11 @@
 import SwiftUI
 
-/// 앱의 루트 뷰. 하단 탭(Stopwatch·Map·Routes·Devices·More)을 담는다.
+/// 앱의 루트 뷰. Stopwatch(대시보드) 단일 화면 — 지도·기록·장치·더보기는 ⚙️ 메뉴로 접근.
 struct ContentView: View {
     var body: some View {
-        RootTabView()
+        NavigationStack {
+            DashboardView()
+        }
     }
 }
 

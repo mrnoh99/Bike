@@ -11,8 +11,7 @@ struct MoreView: View {
     }
 
     var body: some View {
-        NavigationView {
-            List {
+        List {
                 Section("라이딩") {
                     HStack { Text("라이딩 이름"); Spacer(); TextField("", text: $session.routeName).multilineTextAlignment(.trailing) }
                 }
@@ -98,12 +97,12 @@ struct MoreView: View {
                 }
             }
             .navigationTitle("More")
+            .navigationBarTitleDisplayMode(.inline)
             .fileImporter(isPresented: $showImporter,
                           allowedContentTypes: gpxTypes,
                           allowsMultipleSelection: true) { result in
                 if case .success(let urls) = result { session.importGPX(from: urls) }
             }
-        }
     }
 
     private func statRow(_ label: String, _ value: Double) -> some View {

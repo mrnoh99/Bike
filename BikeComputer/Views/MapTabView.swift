@@ -39,6 +39,8 @@ struct MapTabView: View {
             .padding(16)
         }
         .sheet(isPresented: $showPastCourses) { PastCoursesMapView() }
+        .navigationTitle("Map")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private func summary(_ label: String, _ value: String) -> some View {

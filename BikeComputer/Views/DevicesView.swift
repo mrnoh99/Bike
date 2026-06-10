@@ -6,39 +6,38 @@ struct DevicesView: View {
     @EnvironmentObject var session: RideSession
 
     var body: some View {
-        NavigationView {
-            List {
-                Section {
-                    ForEach(bluetooth.sensors) { sensor in
-                        sensorRow(sensor)
-                    }
-                    if bluetooth.sensors.isEmpty {
-                        Text(bluetooth.isScanning ? "센서를 찾는 중…" : "스캔을 시작하세요.")
-                            .foregroundColor(.secondary)
-                    }
-                } footer: {
-                    Text("속도·케이던스 센서는 애플워치 설정 > 블루투스에서 페어링하면 워치를 통해 측정됩니다. 아래 폰 BLE 센서 목록은 워치를 쓰지 않을 때의 폴백입니다(표준 CSC 0x1816·심박 0x180D).")
+        List {
+            Section {
+                ForEach(bluetooth.sensors) { sensor in
+                    sensorRow(sensor)
                 }
+                if bluetooth.sensors.isEmpty {
+                    Text(bluetooth.isScanning ? "센서를 찾는 중…" : "스캔을 시작하세요.")
+                        .foregroundColor(.secondary)
+                }
+            } footer: {
+                Text("속도·케이던스 센서는 애플워치 설정 > 블루투스에서 페어링하면 워치를 통해 측정됩니다. 아래 폰 BLE 센서 목록은 워치를 쓰지 않을 때의 폴백입니다(표준 CSC 0x1816·심박 0x180D).")
+            }
 
-                Section {
-                    NavigationLink {
-                        heartRateSettings
-                    } label: {
-                        Text("Heart Rate Monitor Settings")
-                    }
+            Section {
+                NavigationLink {
+                    heartRateSettings
+                } label: {
+                    Text("Heart Rate Monitor Settings")
                 }
             }
-            .listStyle(.insetGrouped)
-            .navigationTitle("Devices")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(bluetooth.isScanning ? "중지" : "+ / Edit") {
-                        bluetooth.isScanning ? bluetooth.stopScan() : bluetooth.startScan()
-                    }
-                }
-            }
-            .onAppear { if bluetooth.poweredOn { bluetooth.startScan() } }
         }
+        .listStyle(.insetGrouped)
+        .navigationTitle("Devices")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(bluetooth.isScanning ? "중지" : "+ / Edit") {
+                    bluetooth.isScanning ? bluetooth.stopScan() : bluetooth.startScan()
+                }
+            }
+        }
+        .onAppear { if bluetooth.poweredOn { bluetooth.startScan() } }
     }
 
     private func sensorRow(_ s: DiscoveredSensor) -> some View {

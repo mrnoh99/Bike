@@ -53,28 +53,27 @@ struct RoutesView: View {
     @AppStorage("route.bucketMeters") private var bucketMeters: Double = 250
 
     var body: some View {
-        NavigationView {
-            Group {
-                if session.store.records.isEmpty {
-                    emptyState
-                } else if grouped {
-                    groupedList
-                } else {
-                    flatList
-                }
+        Group {
+            if session.store.records.isEmpty {
+                emptyState
+            } else if grouped {
+                groupedList
+            } else {
+                flatList
             }
-            .navigationTitle("Routes")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Menu {
-                        Picker("정렬", selection: $sort) {
-                            ForEach(RideSort.allCases) { Text($0.rawValue).tag($0) }
-                        }
-                        Divider()
-                        Toggle("코스별 보기", isOn: $grouped)
-                    } label: {
-                        Image(systemName: "line.3.horizontal.decrease.circle")
+        }
+        .navigationTitle("Routes")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Menu {
+                    Picker("정렬", selection: $sort) {
+                        ForEach(RideSort.allCases) { Text($0.rawValue).tag($0) }
                     }
+                    Divider()
+                    Toggle("코스별 보기", isOn: $grouped)
+                } label: {
+                    Image(systemName: "line.3.horizontal.decrease.circle")
                 }
             }
         }

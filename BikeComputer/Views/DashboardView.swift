@@ -1,11 +1,18 @@
 import SwiftUI
 
+/// ⚙️ 메뉴로 이동하는 화면들.
+enum DashDestination: String, Identifiable {
+    case map, routes, devices, more
+    var id: String { rawValue }
+}
+
 /// 메인(Stopwatch) 대시보드 — 스크린샷 IMG_4260 재현.
 struct DashboardView: View {
     @EnvironmentObject var session: RideSession
     @State private var showSettings = false
     @State private var showAddCourse = false
     @State private var newCourseName = ""
+    @State private var dest: DashDestination?
 
     private let clockFormatter: DateFormatter = {
         let f = DateFormatter(); f.dateFormat = "HH:mm:ss"; return f
@@ -21,6 +28,15 @@ struct DashboardView: View {
             gpsBar
         }
         .background(Theme.background.ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationDestination(item: $dest) { d in
+            switch d {
+            case .map: MapTabView()
+            case .routes: RoutesView()
+            case .devices: DevicesView()
+            case .more: MoreView()
+            }
+        }
         .sheet(isPresented: $showSettings) { settingsSheet }
         .alert("코스 추가", isPresented: $showAddCourse) {
             TextField("코스 이름 (예: 한강 라이딩)", text: $newCourseName)
@@ -185,7 +201,14 @@ struct DashboardView: View {
             .disabled(session.state == .idle)
             .opacity(session.state == .idle ? 0.5 : 1)
 
-            Button(action: { showSettings = true }) {
+            Menu {
+                Button { dest = .map } label: { Label("지도", systemImage: "map") }
+                Button { dest = .routes } label: { Label("라이딩 기록", systemImage: "folder") }
+                Button { dest = .devices } label: { Label("장치", systemImage: "dot.radiowaves.left.and.right") }
+                Button { dest = .more } label: { Label("더보기 · 가져오기", systemImage: "ellipsis.circle") }
+                Divider()
+                Button { showSettings = true } label: { Label("라이딩 설정", systemImage: "slider.horizontal.3") }
+            } label: {
                 Image(systemName: "gearshape.fill")
                     .font(.system(size: 22))
                     .foregroundColor(Theme.gold)
