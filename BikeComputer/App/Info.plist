@@ -32,6 +32,10 @@
 	<key>UIUserInterfaceStyleDefault</key>
 	<string>Dark</string>
 
+	<!-- Google 지도 API 키(과거 코스 오버레이). 비워두면 Apple 지도로 폴백. -->
+	<key>GMSApiKey</key>
+	<string></string>
+
 	<!-- GPX 등 라이딩 파일을 Files 앱(나의 iPhone > Bike)에서 보고 공유 -->
 	<key>UIFileSharingEnabled</key>
 	<true/>

@@ -14,6 +14,13 @@ settings:
     SWIFT_VERSION: "5.9"
     GENERATE_INFOPLIST_FILE: NO
 
+# 과거 코스 오버레이용 Google 지도 SDK. 쓰지 않으려면 이 packages 블록과
+# 아래 BikeComputer 의 GoogleMaps 의존성을 지우면 Apple 지도로 폴백한다.
+packages:
+  GoogleMaps:
+    url: https://github.com/googlemaps/ios-maps-sdk
+    from: "9.0.0"
+
 targets:
   # 아이폰 앱
   BikeComputer:
@@ -33,6 +40,8 @@ targets:
     dependencies:
       - target: BikeComputerWatch
         embed: true
+      - package: GoogleMaps
+        product: GoogleMaps
 
   # 애플워치 컴패니언 앱 (실시간 심박 측정)
   BikeComputerWatch:

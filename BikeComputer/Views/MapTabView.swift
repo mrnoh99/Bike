@@ -7,6 +7,7 @@ struct MapTabView: View {
     @State private var region = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 37.5665, longitude: 126.9780),
         span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01))
+    @State private var showPastCourses = false
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -25,6 +26,16 @@ struct MapTabView: View {
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
             .padding(.horizontal, 16).padding(.top, 8)
         }
+        .overlay(alignment: .bottomTrailing) {
+            Button { showPastCourses = true } label: {
+                Label("과거 코스", systemImage: "map")
+                    .font(.system(size: 14, weight: .semibold))
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .background(.ultraThinMaterial, in: Capsule())
+            }
+            .padding(16)
+        }
+        .sheet(isPresented: $showPastCourses) { PastCoursesMapView() }
     }
 
     private func summary(_ label: String, _ value: String) -> some View {
