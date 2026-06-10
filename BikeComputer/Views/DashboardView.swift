@@ -221,13 +221,13 @@ struct DashboardView: View {
     private var startLabel: String {
         switch session.state {
         case .idle: return "Start"
-        case .running: return "Pause"
-        case .paused: return "Resume"
+        case .running: return "Stop"
+        case .paused: return "Start"
         }
     }
 
     private var startColor: Color {
-        session.state == .running ? Theme.gold : Theme.green
+        session.state == .running ? Theme.red : Theme.green
     }
 
     // GPS 정확도 표시줄
