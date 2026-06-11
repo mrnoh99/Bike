@@ -28,7 +28,7 @@ struct DashboardView: View {
                 }
                 grid(layout)
                 controls(layout)
-                gpsBar(layout)
+                bottomBar(layout)
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
             .environment(\.dashboardLayout, layout)
@@ -307,21 +307,24 @@ struct DashboardView: View {
         .padding(.vertical, 2)
     }
 
-    // GPS 정확도 표시줄
-    private func gpsBar(_ layout: DeviceLayout.Dashboard) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: "antenna.radiowaves.left.and.right")
-                .font(.system(size: layout.footerFont + 1))
-                .foregroundColor(gpsColor)
-            Text("GPS")
-                .font(.system(size: layout.footerFont + 1, weight: .semibold))
-                .foregroundColor(Theme.label)
-            Spacer()
-            Text("J. NOH MD '26")
+    // GPS(좌) + 개발자 표기(가운데, 한 줄)
+    private func bottomBar(_ layout: DeviceLayout.Dashboard) -> some View {
+        ZStack {
+            Text("Developed by JaiSung NOH MD 2026")
                 .font(.system(size: layout.footerFont))
-                .foregroundColor(Theme.label)
+                .foregroundColor(Theme.label.opacity(0.65))
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity)
+            HStack(spacing: 4) {
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .font(.system(size: layout.footerFont + 1))
+                    .foregroundColor(gpsColor)
+                Text("GPS")
+                    .font(.system(size: layout.footerFont + 1, weight: .semibold))
+                    .foregroundColor(Theme.label)
+                Spacer(minLength: 0)
+            }
         }
         .padding(.horizontal, layout.headerHPadding)
         .padding(.bottom, 2)

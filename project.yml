@@ -122,6 +122,7 @@ targets:
         CFBundleDisplayName: BikeComputer
         NSHealthShareUsageDescription: "라이딩 중 심박·속도·케이던스를 측정합니다."
         NSHealthUpdateUsageDescription: "워크아웃 세션을 Apple 건강에 기록합니다."
+        WKApplication: true
         WKCompanionAppBundleIdentifier: com.jaisungnoh.bikecomputer
         WKRunsIndependentlyOfCompanionApp: false
         WKBackgroundModes:

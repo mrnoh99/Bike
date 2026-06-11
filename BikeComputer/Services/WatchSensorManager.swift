@@ -25,7 +25,9 @@ final class WatchSensorManager: NSObject, ObservableObject {
     private let sensorFreshness: TimeInterval = 5
     private var lastSpeedSensorAt: Date?
     private var lastCadenceSensorAt: Date?
+    private var lastHeartRateAt: Date?
     private var lastAnyDataAt: Date?
+    private var heartRateQuery: HKAnchoredObjectQuery?
     private var freshnessTimer: AnyCancellable?
 
     override init() {
@@ -78,10 +80,12 @@ final class WatchSensorManager: NSObject, ObservableObject {
         watchCadenceRPM = nil
         lastSpeedSensorAt = nil
         lastCadenceSensorAt = nil
+        lastHeartRateAt = nil
         lastAnyDataAt = nil
         speedSensorConnected = false
         cadenceSensorConnected = false
         lastError = nil
+        startPhoneHeartRateObserver()
 
         guard HKHealthStore.isHealthDataAvailable() else {
             statusMessage = "HealthKit 없음"
@@ -133,15 +137,57 @@ final class WatchSensorManager: NSObject, ObservableObject {
 
     func stopWatchWorkout() {
         send(["command": "stop"])
+        stopPhoneHeartRateObserver()
         heartRateBPM = nil
         watchSpeedMps = nil
         watchCadenceRPM = nil
         lastSpeedSensorAt = nil
         lastCadenceSensorAt = nil
+        lastHeartRateAt = nil
         lastAnyDataAt = nil
         speedSensorConnected = false
         cadenceSensorConnected = false
         statusMessage = "대기"
+    }
+
+    /// 워치가 HealthKit 에 기록한 심박을 iPhone 에서 직접 읽는다(WCSession 폴백).
+    private func startPhoneHeartRateObserver() {
+        stopPhoneHeartRateObserver()
+        guard HKHealthStore.isHealthDataAvailable(),
+              let hrType = HKQuantityType.quantityType(forIdentifier: .heartRate) else { return }
+
+        let start = Date()
+        let pred = HKQuery.predicateForSamples(withStart: start, end: nil, options: .strictStartDate)
+        let query = HKAnchoredObjectQuery(type: hrType, predicate: pred, anchor: nil,
+                                          limit: HKObjectQueryNoLimit) { [weak self] _, samples, _, _, _ in
+            self?.ingestPhoneHeartRateSamples(samples)
+        }
+        query.updateHandler = { [weak self] _, samples, _, _, _ in
+            self?.ingestPhoneHeartRateSamples(samples)
+        }
+        healthStore.execute(query)
+        heartRateQuery = query
+    }
+
+    private func stopPhoneHeartRateObserver() {
+        if let q = heartRateQuery {
+            healthStore.stop(q)
+            heartRateQuery = nil
+        }
+    }
+
+    private func ingestPhoneHeartRateSamples(_ samples: [HKSample]?) {
+        guard let sample = samples?.compactMap({ $0 as? HKQuantitySample })
+            .max(by: { $0.endDate < $1.endDate }) else { return }
+        let bpm = Int(sample.quantity.doubleValue(for: .count().unitDivided(by: .minute())).rounded())
+        guard bpm > 0 else { return }
+        DispatchQueue.main.async {
+            self.didReceiveWatchDataThisRide = true
+            self.lastError = nil
+            self.lastAnyDataAt = Date()
+            self.lastHeartRateAt = Date()
+            self.heartRateBPM = bpm
+        }
     }
 
     private func refreshSensorConnectionFlags() {
@@ -206,6 +252,7 @@ final class WatchSensorManager: NSObject, ObservableObject {
 
             if let hr = WCPayload.int(message, "hr"), hr > 0 {
                 self.heartRateBPM = hr
+                self.lastHeartRateAt = Date()
             }
             if message["speedMps"] != nil {
                 self.lastSpeedSensorAt = Date()

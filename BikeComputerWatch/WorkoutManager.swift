@@ -22,6 +22,10 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     private var latestSpeedMps: Double?
     private var latestCadenceRPM: Int?
+    /// UI용 @Published 와 분리 — 백그라운드 콜백에서 즉시 전송할 최신 심박.
+    private var latestHeartRateBPM: Int?
+    /// beginCollection 직후부터 메트릭 전송 허용(isRunning 은 메인에서 갱신).
+    private var collectingMetrics = false
     /// updateApplicationContext 는 마지막 페이로드만 유지하므로 누적한다.
     private var outboundContext: [String: Any] = [:]
 
@@ -105,7 +109,8 @@ final class WorkoutManager: NSObject, ObservableObject {
     }
 
     func startWorkout(configuration: HKWorkoutConfiguration? = nil) {
-        guard !isRunning, HKHealthStore.isHealthDataAvailable() else { return }
+        guard !isRunning, !collectingMetrics, HKHealthStore.isHealthDataAvailable() else { return }
+        requestAuthorization()
         let config: HKWorkoutConfiguration = configuration ?? {
             let c = HKWorkoutConfiguration()
             c.activityType = .cycling
@@ -131,6 +136,8 @@ final class WorkoutManager: NSObject, ObservableObject {
             latestCadenceRPM = nil
 
             let startDate = Date()
+            latestHeartRateBPM = nil
+            s.prepare()
             s.startActivity(with: startDate)
             b.beginCollection(withStart: startDate) { [weak self] success, error in
                 guard let self else { return }
@@ -138,6 +145,7 @@ final class WorkoutManager: NSObject, ObservableObject {
                     self.send(["workoutError": error.localizedDescription])
                     return
                 }
+                self.collectingMetrics = true
                 DispatchQueue.main.async {
                     self.isRunning = true
                     self.startRelayTimer()
@@ -152,6 +160,7 @@ final class WorkoutManager: NSObject, ObservableObject {
     }
 
     func stopWorkout() {
+        collectingMetrics = false
         stopRelayTimer()
         stopHeartRateQuery()
         guard let activeSession = session else { return }
@@ -160,6 +169,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         builder = nil
         latestSpeedMps = nil
         latestCadenceRPM = nil
+        latestHeartRateBPM = nil
         activeSession.end()
         activeBuilder?.endCollection(withEnd: Date()) { _, _ in }
         outboundContext.removeValue(forKey: "hr")
@@ -198,8 +208,14 @@ final class WorkoutManager: NSObject, ObservableObject {
             .max(by: { $0.endDate < $1.endDate }) else { return }
         let bpm = Int(sample.quantity.doubleValue(for: .count().unitDivided(by: .minute())).rounded())
         guard bpm > 0 else { return }
-        DispatchQueue.main.async { self.heartRate = bpm }
+        publishHeartRate(bpm)
         sendMetricsToPhone()
+    }
+
+    private func publishHeartRate(_ bpm: Int) {
+        guard bpm > 0 else { return }
+        latestHeartRateBPM = bpm
+        DispatchQueue.main.async { self.heartRate = bpm }
     }
 
     private func startRelayTimer() {
@@ -215,10 +231,9 @@ final class WorkoutManager: NSObject, ObservableObject {
     }
 
     private func sendMetricsToPhone() {
-        guard isRunning else { return }
-        let hr = heartRate > 0 ? heartRate : nil
-        let payload = metricsPayload(hr: hr, speedMps: latestSpeedMps, cadence: latestCadenceRPM)
-        guard hr != nil || latestSpeedMps != nil || latestCadenceRPM != nil else { return }
+        guard collectingMetrics else { return }
+        let payload = metricsPayload(hr: latestHeartRateBPM, speedMps: latestSpeedMps, cadence: latestCadenceRPM)
+        guard latestHeartRateBPM != nil || latestSpeedMps != nil || latestCadenceRPM != nil else { return }
         send(payload)
     }
 
@@ -255,6 +270,7 @@ extension WorkoutManager: HKWorkoutSessionDelegate {
                         didChangeTo toState: HKWorkoutSessionState,
                         from fromState: HKWorkoutSessionState, date: Date) {
         if toState == .ended {
+            collectingMetrics = false
             stopHeartRateQuery()
             DispatchQueue.main.async {
                 self.isRunning = false
@@ -264,6 +280,7 @@ extension WorkoutManager: HKWorkoutSessionDelegate {
     }
 
     func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
+        collectingMetrics = false
         DispatchQueue.main.async {
             self.isRunning = false
             self.stopRelayTimer()
@@ -281,9 +298,7 @@ extension WorkoutManager: HKLiveWorkoutBuilderDelegate {
            collectedTypes.contains(hrType),
            let q = workoutBuilder.statistics(for: hrType)?.mostRecentQuantity() {
             let bpm = Int(q.doubleValue(for: .count().unitDivided(by: .minute())).rounded())
-            if bpm > 0 {
-                DispatchQueue.main.async { self.heartRate = bpm }
-            }
+            if bpm > 0 { publishHeartRate(bpm) }
         }
 
         if let spType = HKQuantityType.quantityType(forIdentifier: .cyclingSpeed),

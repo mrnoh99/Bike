@@ -48,7 +48,13 @@ if [[ ! -f "$WATCH/Assets.car" ]]; then
 fi
 echo "✓ Watch 아이콘: Assets.car"
 
-plutil -p "$WATCH/Info.plist" | grep -E 'CFBundleIdentifier|CFBundleDisplayName|WKCompanion' || true
+plutil -p "$WATCH/Info.plist" | grep -E 'CFBundleIdentifier|CFBundleDisplayName|WKApplication|WKCompanion' || true
+
+if ! plutil -extract WKApplication raw "$WATCH/Info.plist" 2>/dev/null | grep -q true; then
+  echo "❌ WKApplication=true 없음 — 실기기 설치 실패 원인"
+  exit 1
+fi
+echo "✓ WKApplication: true"
 
 echo ""
 echo "✅ 빌드 OK — Watch 앱은 iPhone 앱 안에 포함되어 있습니다."
