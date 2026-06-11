@@ -26,10 +26,10 @@ struct DevicesView: View {
                 Text("Apple Watch")
             } footer: {
                 Text("""
-                Watch 앱 설치: Xcode에서 BikeComputer 스킴 → 실제 iPhone에 Run(⌘R). \
-                설치 후 iPhone Watch 앱 → 일반 → BikeComputer → "Apple Watch에 설치"를 확인하세요. \
-                ./scripts/build.sh 만으로는 기기에 설치되지 않습니다(서명 필요). \
-                속도·케이던스 BLE 센서는 워치 설정 > 블루투스에서 페어링하세요.
+                Watch 설치: 1) xcodegen generate  2) Xcode BikeComputer 스킴 → Team 서명 → iPhone Run(⌘R)  \
+                3) iPhone Watch 앱 → 일반 → BikeComputer → 설치 ON  4) 실패 시 iPhone·Watch에서 앱 삭제 후 재설치. \
+                ./scripts/build.sh 는 서명 없이 빌드만 합니다. \
+                BLE 센서는 워치 설정 > 블루투스에서 페어링하세요.
                 """)
             }
 
