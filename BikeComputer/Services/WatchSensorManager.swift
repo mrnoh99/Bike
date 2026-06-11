@@ -1,120 +1,225 @@
 import Foundation
+import Combine
 import HealthKit
 import WatchConnectivity
 
 /// 애플워치에서 측정한 실시간 센서값(심박수·속도·케이던스)을 받는다.
-/// - 라이딩 시작 시 `startWatchApp(toHandle:)` 로 워치의 사이클링 워크아웃을 띄우고,
-/// - 워치 앱이 `WCSession` 으로 보내는 값(`hr`/`speedMps`/`cadence`)을 받아 발행한다.
-///
-/// 속도·케이던스 BLE 센서는 워치 *설정 > 블루투스* 에서 OS 에 페어링하면
-/// 워치 워크아웃의 HealthKit(`cyclingSpeed`/`cyclingCadence`)으로 들어오고, 그 값을 폰에 중계한다.
 final class WatchSensorManager: NSObject, ObservableObject {
     @Published private(set) var heartRateBPM: Int?
     @Published private(set) var watchSpeedMps: Double?
     @Published private(set) var watchCadenceRPM: Int?
     @Published private(set) var watchReachable = false
+    @Published private(set) var sessionActivated = false
     @Published private(set) var authorized = false
+    @Published private(set) var speedSensorConnected = false
+    @Published private(set) var cadenceSensorConnected = false
+    @Published private(set) var statusMessage = "대기"
+    @Published private(set) var lastError: String?
 
-    /// 워치 'SpO2 측정' 버튼으로 포착해 보낸 산소포화도(0~1)와 측정 시각.
     @Published private(set) var spo2: Double?
     @Published private(set) var spo2Date: Date?
 
-    /// 이번 라이딩에서 워치로부터 데이터를 한 번이라도 받았는지.
-    /// (false 이면 폰 단독 라이딩으로 보고 폰이 HealthKit 워크아웃을 저장한다.)
     private(set) var didReceiveWatchDataThisRide = false
 
     private let healthStore = HKHealthStore()
+    private let sensorFreshness: TimeInterval = 5
+    private var lastSpeedSensorAt: Date?
+    private var lastCadenceSensorAt: Date?
+    private var lastAnyDataAt: Date?
+    private var freshnessTimer: AnyCancellable?
 
     override init() {
         super.init()
         activateSession()
+        freshnessTimer = Timer.publish(every: 0.5, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in self?.refreshSensorConnectionFlags() }
     }
 
     private func activateSession() {
-        guard WCSession.isSupported() else { return }
+        guard WCSession.isSupported() else {
+            statusMessage = "WatchConnectivity 미지원"
+            return
+        }
         let s = WCSession.default
         s.delegate = self
         s.activate()
     }
 
-    /// HealthKit 권한 요청(심박·사이클링 거리 읽기 + 워크아웃·거리 공유).
-    /// 워치 앱을 띄우려면, 그리고 폰 단독 라이딩을 건강 앱에 저장하려면 폰도 권한이 필요하다.
     func requestAuthorization() {
-        guard HKHealthStore.isHealthDataAvailable() else { return }
+        guard HKHealthStore.isHealthDataAvailable() else {
+            lastError = "HealthKit 사용 불가"
+            return
+        }
         let workout = HKObjectType.workoutType()
         var read: Set<HKObjectType> = [workout]
-        var share: Set<HKSampleType> = [workout, HKSeriesType.workoutRoute()]   // 경로 저장용
+        var share: Set<HKSampleType> = [workout, HKSeriesType.workoutRoute()]
         for id in [HKQuantityTypeIdentifier.heartRate, .distanceCycling] {
             if let t = HKQuantityType.quantityType(forIdentifier: id) {
                 read.insert(t); share.insert(t)
             }
         }
-        // 읽기 전용: SpO2(최근값 표시) + 케이던스·경로(건강에서 가져오기).
         for id in [HKQuantityTypeIdentifier.oxygenSaturation, .cyclingCadence] {
             if let t = HKQuantityType.quantityType(forIdentifier: id) { read.insert(t) }
         }
         read.insert(HKSeriesType.workoutRoute())
-        healthStore.requestAuthorization(toShare: share, read: read) { [weak self] ok, _ in
-            DispatchQueue.main.async { self?.authorized = ok }
+        healthStore.requestAuthorization(toShare: share, read: read) { [weak self] ok, error in
+            DispatchQueue.main.async {
+                self?.authorized = ok
+                if let error { self?.lastError = error.localizedDescription }
+            }
         }
     }
 
-    /// 라이딩 시작: 워치 앱을 실행해 사이클링 워크아웃을 시작시킨다.
     func startWatchWorkout() {
         didReceiveWatchDataThisRide = false
-        watchSpeedMps = nil
-        watchCadenceRPM = nil
-        guard HKHealthStore.isHealthDataAvailable() else { return }
-        let config = HKWorkoutConfiguration()
-        config.activityType = .cycling
-        config.locationType = .outdoor
-        healthStore.startWatchApp(toHandle: config) { _, _ in }
-        send(["command": "start"])
-    }
-
-    /// 라이딩 종료: 워치 워크아웃을 멈춘다.
-    func stopWatchWorkout() {
         heartRateBPM = nil
         watchSpeedMps = nil
         watchCadenceRPM = nil
+        lastSpeedSensorAt = nil
+        lastCadenceSensorAt = nil
+        lastAnyDataAt = nil
+        speedSensorConnected = false
+        cadenceSensorConnected = false
+        lastError = nil
+
+        guard HKHealthStore.isHealthDataAvailable() else {
+            statusMessage = "HealthKit 없음"
+            lastError = "이 기기에서 HealthKit을 사용할 수 없습니다."
+            return
+        }
+
+        let config = HKWorkoutConfiguration()
+        config.activityType = .cycling
+        config.locationType = .outdoor
+
+        statusMessage = "워치 앱 실행 중…"
+        launchWatchApp(config: config, attempt: 1)
+    }
+
+    private func launchWatchApp(config: HKWorkoutConfiguration, attempt: Int) {
+        healthStore.startWatchApp(with: config) { [weak self] success, error in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if let error {
+                    self.lastError = error.localizedDescription
+                    self.statusMessage = "워치 실행 실패"
+                    self.retryWatchLaunch(config: config, attempt: attempt)
+                    return
+                }
+                if success {
+                    self.lastError = nil
+                    self.statusMessage = "워치 워크아웃 대기"
+                    self.send(["command": "start"])
+                    return
+                }
+                self.lastError = """
+                Watch 앱이 설치되지 않았습니다.
+                iPhone Watch 앱 → 일반 → BikeComputer → "Apple Watch에 설치"를 켜세요.
+                """
+                self.statusMessage = "워치 앱 미설치"
+                self.retryWatchLaunch(config: config, attempt: attempt)
+            }
+        }
+    }
+
+    private func retryWatchLaunch(config: HKWorkoutConfiguration, attempt: Int) {
+        guard attempt < 6 else { return }
+        statusMessage = "워치 앱 설치 대기… (\(attempt)/5)"
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
+            self?.launchWatchApp(config: config, attempt: attempt + 1)
+        }
+    }
+
+    func stopWatchWorkout() {
         send(["command": "stop"])
+        heartRateBPM = nil
+        watchSpeedMps = nil
+        watchCadenceRPM = nil
+        lastSpeedSensorAt = nil
+        lastCadenceSensorAt = nil
+        lastAnyDataAt = nil
+        speedSensorConnected = false
+        cadenceSensorConnected = false
+        statusMessage = "대기"
+    }
+
+    private func refreshSensorConnectionFlags() {
+        let now = Date()
+        speedSensorConnected = isFresh(lastSpeedSensorAt, now: now)
+        cadenceSensorConnected = isFresh(lastCadenceSensorAt, now: now)
+        if let lastAnyDataAt, now.timeIntervalSince(lastAnyDataAt) <= sensorFreshness {
+            statusMessage = watchReachable ? "워치 데이터 수신 중" : "워치 데이터 수신(백그라운드)"
+        }
+    }
+
+    private func isFresh(_ date: Date?, now: Date) -> Bool {
+        guard let date else { return false }
+        return now.timeIntervalSince(date) <= sensorFreshness
     }
 
     private func send(_ payload: [String: Any]) {
         let s = WCSession.default
-        guard s.activationState == .activated else { return }
+        guard s.activationState == .activated else {
+            lastError = "WatchConnectivity 미활성"
+            return
+        }
         if s.isReachable {
-            s.sendMessage(payload, replyHandler: nil, errorHandler: nil)
+            s.sendMessage(payload, replyHandler: nil) { [weak self] error in
+                DispatchQueue.main.async { self?.lastError = error.localizedDescription }
+            }
         } else {
-            try? s.updateApplicationContext(payload)
+            do {
+                try s.updateApplicationContext(payload)
+            } catch {
+                DispatchQueue.main.async { self.lastError = error.localizedDescription }
+            }
         }
     }
 
     private func handle(_ message: [String: Any]) {
-        // SpO2 측정값(워치 버튼) — 별도 처리(센서 스트림과 무관하게 도착).
-        if let v = message["spo2"] as? Double {
+        if let err = message["workoutError"] as? String {
+            DispatchQueue.main.async {
+                self.lastError = err
+                self.statusMessage = "워치 워크아웃 오류"
+            }
+        }
+        if WCPayload.bool(message, "workoutStarted") == true {
+            DispatchQueue.main.async { self.statusMessage = "워치 워크아웃 시작됨" }
+        }
+        if let v = WCPayload.double(message, "spo2") {
             DispatchQueue.main.async {
                 self.spo2 = v
-                if let t = message["spo2Date"] as? Double {
+                if let t = WCPayload.double(message, "spo2Date") {
                     self.spo2Date = Date(timeIntervalSince1970: t)
                 } else {
                     self.spo2Date = Date()
                 }
             }
         }
-        // 명령 에코 등 센서값이 없는 메시지는 무시.
-        let hasSensorData = message["hr"] != nil || message["speedMps"] != nil || message["cadence"] != nil
-        guard hasSensorData else { return }
+        guard WCPayload.hasSensorData(message) else { return }
+
         DispatchQueue.main.async {
             self.didReceiveWatchDataThisRide = true
-            if let hr = message["hr"] as? Int {
-                self.heartRateBPM = hr > 0 ? hr : nil
+            self.lastError = nil
+            self.lastAnyDataAt = Date()
+
+            if let hr = WCPayload.int(message, "hr"), hr > 0 {
+                self.heartRateBPM = hr
             }
-            if let v = message["speedMps"] as? Double {
-                self.watchSpeedMps = v >= 0 ? v : nil
+            if message["speedMps"] != nil {
+                self.lastSpeedSensorAt = Date()
+                if let v = WCPayload.double(message, "speedMps"), v >= 0 {
+                    self.watchSpeedMps = v
+                }
+                self.speedSensorConnected = true
             }
-            if let rpm = message["cadence"] as? Int {
-                self.watchCadenceRPM = rpm >= 0 ? rpm : nil
+            if message["cadence"] != nil {
+                self.lastCadenceSensorAt = Date()
+                if let rpm = WCPayload.int(message, "cadence"), rpm >= 0 {
+                    self.watchCadenceRPM = rpm
+                }
+                self.cadenceSensorConnected = true
             }
         }
     }
@@ -122,17 +227,36 @@ final class WatchSensorManager: NSObject, ObservableObject {
 
 extension WatchSensorManager: WCSessionDelegate {
     func session(_ session: WCSession, activationDidCompleteWith state: WCSessionActivationState, error: Error?) {
-        DispatchQueue.main.async { self.watchReachable = session.isReachable }
+        DispatchQueue.main.async {
+            self.sessionActivated = state == .activated
+            self.watchReachable = session.isReachable
+            if let error {
+                self.lastError = error.localizedDescription
+                self.statusMessage = "Watch 연결 오류"
+            } else if state == .activated {
+                self.statusMessage = session.isPaired ? "Watch 연결됨" : "Watch 미페어링"
+                let ctx = session.receivedApplicationContext
+                if !ctx.isEmpty { self.handle(ctx) }
+            }
+        }
     }
+
     func sessionDidBecomeInactive(_ session: WCSession) {}
     func sessionDidDeactivate(_ session: WCSession) { session.activate() }
+
     func sessionReachabilityDidChange(_ session: WCSession) {
         DispatchQueue.main.async { self.watchReachable = session.isReachable }
     }
+
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
         handle(message)
     }
+
     func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
         handle(applicationContext)
+    }
+
+    func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
+        handle(userInfo)
     }
 }

@@ -91,6 +91,6 @@ extension LocationManager: CLLocationManagerDelegate {
         }
         previousLocation = loc
         track.append(loc.coordinate)
-        locations.append(loc)
+        self.locations.append(loc)
     }
 }

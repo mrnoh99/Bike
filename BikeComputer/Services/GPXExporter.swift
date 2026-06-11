@@ -40,7 +40,10 @@ enum GPXExporter {
 
     /// GPX 저장 폴더: iCloud 컨테이너(BikeCom)의 Documents/GPX, 없으면 로컬 Documents/GPX.
     static func gpxFolder() -> URL {
-        if let container = FileManager.default.url(forUbiquityContainerIdentifier: nil) {
+        let useCloud = Thread.isMainThread
+            ? CloudDocuments.isAvailable
+            : DispatchQueue.main.sync { CloudDocuments.isAvailable }
+        if useCloud, let container = CloudDocuments.containerURL() {
             return container.appendingPathComponent("Documents/GPX", isDirectory: true)
         }
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]

@@ -19,19 +19,21 @@ struct DashboardView: View {
     }()
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            if session.state == .paused && session.autoPaused {
-                autoPauseBadge
+        GeometryReader { geo in
+            let layout = DeviceLayout.Dashboard.make(for: geo.size)
+            VStack(spacing: 0) {
+                header(layout)
+                if session.state == .paused && session.autoPaused {
+                    autoPauseBadge
+                }
+                grid(layout)
+                controls(layout)
+                gpsBar(layout)
             }
-            ScrollView {
-                grid
-            }
-            controls
-            gpsBar
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+            .environment(\.dashboardLayout, layout)
         }
-        .background(Theme.background.ignoresSafeArea())
-        .toolbar(.hidden, for: .navigationBar)
+        .background(Theme.background)
         .navigationDestination(item: $dest) { d in
             switch d {
             case .map: MapTabView()
@@ -40,7 +42,10 @@ struct DashboardView: View {
             case .more: MoreView()
             }
         }
-        .sheet(isPresented: $showSettings) { settingsSheet }
+        .sheet(isPresented: $showSettings) {
+            RideSettingsSheet(showAddCourse: $showAddCourse, newCourseName: $newCourseName)
+                .environmentObject(session)
+        }
         .alert("코스 추가", isPresented: $showAddCourse) {
             TextField("코스 이름 (예: 한강 라이딩)", text: $newCourseName)
             Button("추가") { session.addCourse(newCourseName) }
@@ -68,34 +73,37 @@ struct DashboardView: View {
     }
 
     // 상단 라벨 칩 (코스 풀다운 / 자전거 종류 풀다운)
-    private var header: some View {
-        HStack {
-            courseMenu
-            Spacer()
-            bikeMenu
+    private func header(_ layout: DeviceLayout.Dashboard) -> some View {
+        HStack(spacing: 8) {
+            courseMenu(layout)
+                .frame(maxWidth: .infinity)
+            bikeMenu(layout)
+                .frame(maxWidth: .infinity)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .padding(.bottom, 4)
+        .padding(.horizontal, layout.headerHPadding)
+        .padding(.top, layout.headerTopPadding)
+        .padding(.bottom, layout.headerBottomPadding)
     }
 
-    // 풀다운 칩 모양(텍스트 + ⌄)
-    private func pulldownChip(_ text: String) -> some View {
-        HStack(spacing: 4) {
+    // 풀다운 칩 — 375pt 폭에서 양쪽이 반씩 나뉘도록 축소 허용.
+    private func pulldownChip(_ text: String, layout: DeviceLayout.Dashboard) -> some View {
+        HStack(spacing: 3) {
             Text(text)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: layout.chipFont, weight: .semibold))
                 .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
             Image(systemName: "chevron.down")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: layout.chipFont - 2, weight: .semibold))
                 .foregroundColor(.white.opacity(0.7))
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 7)
+        .padding(.horizontal, layout.chipHPadding)
+        .padding(.vertical, layout.chipVPadding)
+        .frame(maxWidth: .infinity)
         .background(Capsule().fill(Color(white: 0.14)))
     }
 
-    // 코스 풀다운(출근/퇴근 등 + 코스 추가)
-    private var courseMenu: some View {
+    private func courseMenu(_ layout: DeviceLayout.Dashboard) -> some View {
         Menu {
             ForEach(session.courses, id: \.self) { course in
                 Button(course) { session.routeName = course }
@@ -103,12 +111,11 @@ struct DashboardView: View {
             Divider()
             Button("코스 추가…", systemImage: "plus") { newCourseName = ""; showAddCourse = true }
         } label: {
-            pulldownChip(session.routeName)
+            pulldownChip(session.routeName, layout: layout)
         }
     }
 
-    // 자전거 종류 풀다운(프리셋 3종 + 직접 입력)
-    private var bikeMenu: some View {
+    private func bikeMenu(_ layout: DeviceLayout.Dashboard) -> some View {
         Menu {
             ForEach(RideSession.bikePresets, id: \.self) { name in
                 Button(name) { session.bikeName = name }
@@ -116,85 +123,119 @@ struct DashboardView: View {
             Divider()
             Button("직접 입력…") { showSettings = true }
         } label: {
-            pulldownChip(session.bikeName)
+            pulldownChip(session.bikeName, layout: layout)
         }
     }
 
-    // 2열 메트릭 그리드
-    private var grid: some View {
+    // 메트릭 그리드 — 8행이 남은 높이를 균등 분배(스크롤 없음).
+    private func grid(_ layout: DeviceLayout.Dashboard) -> some View {
         VStack(spacing: 0) {
-            row {
+            metricRow {
                 MetricCell(label: "Clock", value: clockFormatter.string(from: session.clock).prefix5,
-                           color: Theme.value, valueSize: 44)
+                           color: Theme.value)
                 MetricCell(label: "Distance", value: fmt(session.displayDistance, 2),
-                           unit: session.unit.distanceLabel, color: Theme.gold, valueSize: 44)
+                           color: Theme.gold)
             }
             divider
-            row {
+            metricRow {
                 MetricCell(label: "Speed", value: fmt(session.displaySpeed, 2),
-                           unit: session.unit.speedLabel, color: Theme.blue, valueSize: 40)
+                           unit: session.unit.speedLabel,
+                           sensorStatus: session.watch.speedSensorConnected ? .connected : .waiting,
+                           color: Theme.blue)
                 MetricCell(label: "Average", value: fmt(session.displayAverageSpeed, 2),
-                           unit: session.unit.speedLabel, color: Theme.value, valueSize: 40)
+                           color: Theme.value)
             }
             divider
-            row {
+            metricRow {
                 MetricCell(label: "Ride", value: formatDuration(session.rideSeconds),
-                           subvalue: formatDuration(session.movingSeconds), color: Theme.gold, valueSize: 40)
+                           subvalue: formatDuration(session.movingSeconds), color: Theme.gold)
                 MetricCell(label: "Total", value: formatDuration(session.totalSeconds),
-                           color: Theme.gold, valueSize: 40)
+                           color: Theme.gold)
             }
             divider
-            // 심박: 현재 / 평균 / 최대
-            row {
+            metricRow {
                 MetricCell(label: "HR", value: session.heartRate.map(String.init) ?? "– – –",
-                           unit: "bpm", color: Theme.red, valueSize: 34)
+                           unit: "bpm", color: Theme.red)
                 MetricCell(label: "Mean", value: session.avgHeartRate.map(String.init) ?? "– – –",
-                           unit: "bpm", color: Theme.red, valueSize: 26)
+                           color: Theme.red)
                 MetricCell(label: "Max", value: session.maxHeartRate.map(String.init) ?? "– – –",
-                           unit: "bpm", color: Theme.red, valueSize: 26)
+                           color: Theme.red)
             }
             divider
-            // 케이던스: 현재 / 평균 / 최대
-            row {
-                MetricCell(label: "Cadence", value: session.cadence.map(String.init) ?? "– – –",
-                           unit: "rpm", color: Theme.value, valueSize: 34)
+            metricRow {
+                MetricCell(label: "Cad", value: session.cadence.map(String.init) ?? "– – –",
+                           unit: "rpm",
+                           sensorStatus: session.watch.cadenceSensorConnected ? .connected : .waiting,
+                           color: Theme.value)
                 MetricCell(label: "Mean", value: session.avgCadence.map(String.init) ?? "– – –",
-                           unit: "rpm", color: Theme.value, valueSize: 26)
+                           color: Theme.value)
                 MetricCell(label: "Max", value: session.maxCadence.map(String.init) ?? "– – –",
-                           unit: "rpm", color: Theme.value, valueSize: 26)
+                           color: Theme.value)
             }
             divider
-            // 산소포화도: 최근 / 24h 최저 / 24h 최고 + 각 측정 시각(작은 글씨).
-            row {
-                MetricCell(label: "SpO2 최근",
-                           value: session.spo2Percent.map { "\($0)%" } ?? "– – –",
+            metricRow {
+                MetricCell(label: "SpO2",
+                           value: session.spo2Percent.map(String.init) ?? "– – –",
                            subvalue: session.spo2LatestTimeText ?? " ",
-                           color: Theme.cyan, valueSize: 30)
-                MetricCell(label: "24h 최저",
-                           value: session.spo2MinPercent.map { "\($0)%" } ?? "– – –",
+                           valueSuffix: session.spo2Percent != nil ? "%" : nil,
+                           color: Theme.cyan)
+                MetricCell(label: "24h Min",
+                           value: session.spo2MinPercent.map(String.init) ?? "– – –",
                            subvalue: session.spo2MinTimeText ?? " ",
-                           color: Theme.cyan, valueSize: 26)
-                MetricCell(label: "24h 최고",
-                           value: session.spo2MaxPercent.map { "\($0)%" } ?? "– – –",
+                           color: Theme.cyan)
+                MetricCell(label: "24h Max",
+                           value: session.spo2MaxPercent.map(String.init) ?? "– – –",
                            subvalue: session.spo2MaxTimeText ?? " ",
-                           color: Theme.cyan, valueSize: 26)
+                           color: Theme.cyan)
             }
             divider
-            // 누적 거리 3종을 한 줄에. This Year/Total 은 큰 숫자라 작은 글씨로 표시.
-            row {
-                MetricCell(label: "This Month", value: fmt(session.thisMonthDistance, 0),
-                           unit: session.unit.distanceLabel, color: Theme.purple, valueSize: 30)
-                MetricCell(label: "This Year", value: fmt(session.thisYearDistance, 0),
-                           unit: session.unit.distanceLabel, color: Theme.purple, valueSize: 22)
-                MetricCell(label: "Total", value: fmt(session.totalDistance, 0),
-                           unit: session.unit.distanceLabel, color: Theme.purple, valueSize: 22)
-            }
+            distanceStatsRow(layout)
         }
-        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, layout.gridHPadding)
     }
 
-    private func row<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+    // Month 거리 글자 크기에 Year·Total 을 맞추고, km 는 작은 글씨.
+    private func distanceStatsRow(_ layout: DeviceLayout.Dashboard) -> some View {
+        let month = fmt(session.thisMonthDistance, 0)
+        let year = fmt(session.thisYearDistance, 0)
+        let total = fmt(session.totalDistance, 0)
+        let unit = session.unit.distanceLabel
+
+        return GeometryReader { geo in
+            let labelHeight = layout.labelFont * 1.2
+            let footerHeight = layout.unitFont * 1.2
+            let valueHeight = max(geo.size.height - labelHeight - footerHeight - 2, 10)
+            let colWidth = max(geo.size.width / 3 - 4, 10)
+            let fontSize = MetricCell.fittedValueFontSize(
+                value: month,
+                suffix: " \(unit)",
+                suffixSmall: true,
+                maxWidth: colWidth,
+                maxHeight: valueHeight,
+                unitFont: layout.unitFont
+            )
+
+            HStack(spacing: 0) {
+                MetricCell(label: "Month", value: month,
+                           valueSuffix: " \(unit)",
+                           fixedValueFontSize: fontSize,
+                           color: Theme.purple)
+                MetricCell(label: "Year", value: year,
+                           fixedValueFontSize: fontSize,
+                           color: Theme.purple)
+                MetricCell(label: "Total", value: total,
+                           fixedValueFontSize: fontSize,
+                           color: Theme.purple)
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func metricRow<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         HStack(spacing: 0) { content() }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var divider: some View {
@@ -202,22 +243,23 @@ struct DashboardView: View {
     }
 
     // Start / Done 버튼 + 설정 기어
-    private var controls: some View {
-        HStack(spacing: 12) {
+    private func controls(_ layout: DeviceLayout.Dashboard) -> some View {
+        HStack(spacing: 10) {
             Button(action: { session.start() }) {
                 Text(startLabel)
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.system(size: layout.controlFont, weight: .bold))
                     .foregroundColor(.white)
-                    .frame(maxWidth: .infinity).frame(height: 48)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: layout.controlHeight)
                     .background(Capsule().fill(startColor))
             }
-            // Done 은 일시정지(Stop 후) 상태에서만 Start 와 함께 표시. (running 중엔 Stop 혼자)
             if session.state == .paused {
                 Button(action: { session.finish() }) {
                     Text("Done")
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.system(size: layout.controlFont, weight: .bold))
                         .foregroundColor(.white)
-                        .frame(maxWidth: .infinity).frame(height: 48)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: layout.controlHeight)
                         .background(Capsule().fill(Theme.gray))
                 }
             }
@@ -231,12 +273,13 @@ struct DashboardView: View {
                 Button { showSettings = true } label: { Label("라이딩 설정", systemImage: "slider.horizontal.3") }
             } label: {
                 Image(systemName: "gearshape.fill")
-                    .font(.system(size: 22))
+                    .font(.system(size: layout.gearIcon))
                     .foregroundColor(Theme.gold)
+                    .frame(width: layout.gearIcon + 8, height: layout.controlHeight)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, layout.headerHPadding)
+        .padding(.vertical, layout.controlVPadding)
     }
 
     private var startLabel: String {
@@ -253,33 +296,35 @@ struct DashboardView: View {
 
     // 자동 일시정지 배지
     private var autoPauseBadge: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 4) {
             Image(systemName: "pause.circle.fill")
             Text("AUTO PAUSE")
         }
-        .font(.system(size: 13, weight: .heavy))
+        .font(.system(size: 11, weight: .heavy))
         .foregroundColor(.black)
-        .padding(.horizontal, 14).padding(.vertical, 6)
+        .padding(.horizontal, 10).padding(.vertical, 4)
         .background(Capsule().fill(Theme.gold))
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
     }
 
     // GPS 정확도 표시줄
-    private var gpsBar: some View {
-        HStack(spacing: 6) {
+    private func gpsBar(_ layout: DeviceLayout.Dashboard) -> some View {
+        HStack(spacing: 4) {
             Image(systemName: "antenna.radiowaves.left.and.right")
-                .font(.system(size: 11))
+                .font(.system(size: layout.footerFont + 1))
                 .foregroundColor(gpsColor)
             Text("GPS")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: layout.footerFont + 1, weight: .semibold))
                 .foregroundColor(Theme.label)
             Spacer()
-            Text("Designed by Jaisung NOH MD 2026")
-                .font(.system(size: 9))
+            Text("J. NOH MD '26")
+                .font(.system(size: layout.footerFont))
                 .foregroundColor(Theme.label)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 4)
+        .padding(.horizontal, layout.headerHPadding)
+        .padding(.bottom, 2)
     }
 
     private var gpsColor: Color {
@@ -288,85 +333,6 @@ struct DashboardView: View {
         if acc <= 10 { return Theme.green }
         if acc <= 30 { return Theme.gold }
         return Theme.red
-    }
-
-    // 설정 시트 (라벨·단위·휠 둘레)
-    private var settingsSheet: some View {
-        NavigationView {
-            Form {
-                Section("이름") {
-                    TextField("라이딩 이름", text: $session.routeName)
-                }
-                Section("코스") {
-                    ForEach(session.courses, id: \.self) { course in
-                        Button {
-                            session.routeName = course
-                        } label: {
-                            HStack {
-                                Text(course).foregroundColor(.primary)
-                                Spacer()
-                                if session.routeName == course {
-                                    Image(systemName: "checkmark").foregroundColor(Theme.gold)
-                                }
-                            }
-                        }
-                    }
-                    .onDelete { session.removeCourse(at: $0) }
-                    Button("코스 추가…", systemImage: "plus") { newCourseName = ""; showAddCourse = true }
-                }
-                Section("자전거 종류") {
-                    Menu {
-                        ForEach(RideSession.bikePresets, id: \.self) { name in
-                            Button(name) { session.bikeName = name }
-                        }
-                    } label: {
-                        HStack {
-                            Text("종류 선택")
-                            Spacer()
-                            Text(session.bikeName).foregroundColor(.secondary)
-                            Image(systemName: "chevron.up.chevron.down").foregroundColor(.secondary)
-                        }
-                    }
-                    TextField("직접 입력", text: $session.bikeName)
-                }
-                Section("자동 일시정지") {
-                    Toggle("바퀴 멈추면 자동 일시정지", isOn: $session.autoPauseEnabled)
-                    if session.autoPauseEnabled {
-                        HStack {
-                            Text("임계 속도")
-                            Spacer()
-                            Text("\(session.autoPauseThresholdMps * 3.6, specifier: "%.1f") km/h")
-                                .foregroundColor(.secondary)
-                        }
-                        Slider(value: Binding(
-                            get: { session.autoPauseThresholdMps * 3.6 },
-                            set: { session.autoPauseThresholdMps = $0 / 3.6 }),
-                               in: 1...10, step: 0.5)
-                        HStack {
-                            Text("지연 시간")
-                            Spacer()
-                            Text("\(Int(session.autoPauseDelay))초").foregroundColor(.secondary)
-                        }
-                        Slider(value: $session.autoPauseDelay, in: 1...10, step: 1)
-                    }
-                    Text("바퀴가 임계 속도 미만으로 지연 시간만큼 멈추면 자동 일시정지되고, 다시 구르면 자동 재개됩니다.")
-                        .font(.caption).foregroundColor(.secondary)
-                }
-                Section("속도 센서") {
-                    HStack {
-                        Text("휠 둘레")
-                        Spacer()
-                        Text("\(session.bluetooth.wheelCircumferenceMeters, specifier: "%.3f") m")
-                            .foregroundColor(.secondary)
-                    }
-                    Slider(value: $session.bluetooth.wheelCircumferenceMeters, in: 1.5...2.4, step: 0.005)
-                    Text("700×25C ≈ 2.105 m · 700×28C ≈ 2.136 m")
-                        .font(.caption).foregroundColor(.secondary)
-                }
-            }
-            .navigationTitle("설정")
-            .navigationBarTitleDisplayMode(.inline)
-        }
     }
 
     private func fmt(_ v: Double, _ digits: Int) -> String {
@@ -379,10 +345,10 @@ private extension String {
     var prefix5: String { String(prefix(5)) }
 }
 
-#Preview {
+#Preview("iPhone 12 mini") {
     let session = RideSession.preview
     return DashboardView()
         .environmentObject(session)
-        .environmentObject(session.bluetooth)
         .preferredColorScheme(.dark)
+        .previewDevice(PreviewDevice(rawValue: "iPhone 12 mini"))
 }

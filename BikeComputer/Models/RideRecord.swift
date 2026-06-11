@@ -61,8 +61,12 @@ final class RideStore: ObservableObject {
     init() {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         localURL = docs.appendingPathComponent(fileName)
-        load()           // 우선 로컬에서 즉시 로드
-        resolveCloud()   // iCloud 컨테이너 비동기 확인 → 있으면 그쪽과 동기화
+        load()   // 우선 로컬에서 즉시 로드
+        // iCloud 는 계정·컨테이너 준비 후 시도(미설정 시 accounts Code=7 로그만 나고 로컬 폴백)
+        DispatchQueue.main.async { [weak self] in
+            guard let self, CloudDocuments.isAvailable else { return }
+            self.resolveCloud()
+        }
     }
 
     private var fileURL: URL { cloudURL ?? localURL }
@@ -132,8 +136,8 @@ final class RideStore: ObservableObject {
 
     private func resolveCloud() {
         DispatchQueue.global(qos: .utility).async { [weak self] in
-            guard let self,
-                  let container = FileManager.default.url(forUbiquityContainerIdentifier: nil) else { return }
+            guard let self else { return }
+            guard let container = CloudDocuments.containerURL() else { return }
             let docs = container.appendingPathComponent("Documents", isDirectory: true)
             try? FileManager.default.createDirectory(at: docs, withIntermediateDirectories: true)
             let url = docs.appendingPathComponent(self.fileName)
@@ -158,6 +162,7 @@ final class RideStore: ObservableObject {
 
     /// 다른 기기에서 바뀐 rides.json 을 감지해 다시 불러온다.
     private func startMetadataQuery() {
+        guard cloudURL != nil, CloudDocuments.isAvailable else { return }
         let q = NSMetadataQuery()
         q.searchScopes = [NSMetadataQueryUbiquitousDocumentsScope]
         q.predicate = NSPredicate(format: "%K == %@", NSMetadataItemFSNameKey, fileName)
@@ -171,5 +176,20 @@ final class RideStore: ObservableObject {
 
     @objc private func cloudChanged() {
         load()
+    }
+}
+
+/// iCloud Documents 컨테이너 접근. 미로그인·권한 없으면 nil → 로컬 폴백.
+enum CloudDocuments {
+    static let containerID = "iCloud.com.jaisungnoh.bikecomputer"
+
+    /// iCloud 계정 로그인 여부. 메인 스레드에서 호출.
+    static var isAvailable: Bool {
+        FileManager.default.ubiquityIdentityToken != nil
+    }
+
+    /// 컨테이너 URL. 백그라운드에서 호출.
+    static func containerURL() -> URL? {
+        FileManager.default.url(forUbiquityContainerIdentifier: containerID)
     }
 }
