@@ -4,48 +4,35 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
-	<key>CFBundleDisplayName</key>
-	<string>Bike</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
-	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>$(MARKETING_VERSION)</string>
+	<string>1.0</string>
 	<key>CFBundleVersion</key>
-	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>LSRequiresIPhoneOS</key>
-	<true/>
-	<key>UILaunchScreen</key>
-	<dict>
-		<key>UIColorName</key>
-		<string></string>
-	</dict>
-	<key>UISupportedInterfaceOrientations</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-	</array>
-	<key>UIUserInterfaceStyleDefault</key>
-	<string>Dark</string>
-
-	<!-- Google 지도 API 키(과거 코스 오버레이). 비워두면 Apple 지도로 폴백. -->
+	<string>1</string>
 	<key>GMSApiKey</key>
 	<string></string>
-
-	<!-- GPX 등 라이딩 파일을 Files 앱(나의 iPhone > Bike)에서 보고 공유 -->
-	<key>UIFileSharingEnabled</key>
-	<true/>
-	<key>LSSupportsOpeningDocumentsInPlace</key>
-	<true/>
-
-	<!-- iCloud Drive 에 'BikeCom' 폴더로 표시(앱 컨테이너) -->
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>라이딩 종료 시 요약을 캘린더에 기록합니다.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>누적 사이클링 거리와 SpO2를 표시하고, 운동 기록을 가져옵니다.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>라이딩을 Apple 건강 앱에 저장합니다.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>백그라운드에서도 라이딩 경로를 기록합니다.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>라이딩 중 GPS 경로·거리·속도를 기록합니다.</string>
 	<key>NSUbiquitousContainers</key>
 	<dict>
-		<key>iCloud.com.example.bikecomputer</key>
+		<key>iCloud.com.jaisungnoh.bikecomputer</key>
 		<dict>
 			<key>NSUbiquitousContainerIsDocumentScopePublic</key>
 			<true/>
@@ -55,34 +42,15 @@
 			<string>Any</string>
 		</dict>
 	</dict>
-
-	<!-- 권한 설명 (블루투스 센서·GPS) -->
-	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>속도·케이던스·심박수 센서에 연결하기 위해 블루투스를 사용합니다.</string>
-	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>속도·케이던스·심박수 센서에 연결하기 위해 블루투스를 사용합니다.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>이동 거리와 속도, 경로를 기록하기 위해 위치를 사용합니다.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>화면이 꺼져 있어도 라이딩 거리·경로를 계속 기록하기 위해 위치를 사용합니다.</string>
-	<key>NSMotionUsageDescription</key>
-	<string>라이딩 활동을 기록하기 위해 모션 데이터를 사용합니다.</string>
-	<key>NSHealthShareUsageDescription</key>
-	<string>애플워치로 측정한 심박수를 라이딩 화면에 표시하기 위해 사용합니다.</string>
-	<key>NSHealthUpdateUsageDescription</key>
-	<string>라이딩 운동(워크아웃)을 건강 앱에 기록하기 위해 사용합니다.</string>
-	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>라이딩 요약을 'bike' 캘린더에 기록하기 위해 캘린더 목록 확인·이벤트 추가에 사용합니다.</string>
-	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
-	<string>라이딩을 마치면 운동 요약(시간·거리)을 캘린더에 기록하기 위해 사용합니다.</string>
-	<key>NSCalendarsUsageDescription</key>
-	<string>라이딩 요약을 'bike' 캘린더에 기록하기 위해 사용합니다.</string>
-
-	<!-- 백그라운드에서 센서·위치 계속 기록 -->
 	<key>UIBackgroundModes</key>
 	<array>
-		<string>bluetooth-central</string>
 		<string>location</string>
+	</array>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
 	</array>
 </dict>
 </plist>

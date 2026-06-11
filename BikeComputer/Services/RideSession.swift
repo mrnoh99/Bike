@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import CoreLocation
+import UIKit
 
 /// 라이딩 상태 머신.
 enum RideState {
@@ -9,19 +10,17 @@ enum RideState {
     case paused     // 일시정지
 }
 
-/// 현재 속도/케이던스의 출처. 우선순위: 워치 > 폰 BLE 센서 > GPS.
+/// 현재 속도 출처. 워치(페어링된 CSC 센서) > GPS 폴백.
 enum SpeedSource {
     case watch
-    case bleSensor
     case gps
 }
 
 /// 대시보드의 모든 지표를 모으는 메인 뷰모델.
-/// 블루투스 센서 + GPS 를 결합해 거리·속도·심박·케이던스를 계산하고,
+/// 워치 센서 + GPS 를 결합해 거리·속도·심박·케이던스를 계산하고,
 /// 종료 시 RideStore 에 기록을 저장한다.
 final class RideSession: ObservableObject {
     // 하위 서비스
-    let bluetooth = BluetoothManager()
     let location = LocationManager()
     let store = RideStore()
     let watch = WatchSensorManager()   // 애플워치 심박·속도·케이던스
@@ -108,8 +107,21 @@ final class RideSession: ObservableObject {
     }
 
     // 라벨(스크린샷의 "1.출근길" / "6.Yeti" 자리)
-    @Published var routeName: String = "1.라이딩"
-    @Published var bikeName: String = "내 자전거"
+    @Published var routeName: String = UserDefaults.standard.string(forKey: "bike.routeName") ?? "1.라이딩"
+    @Published var bikeName: String = UserDefaults.standard.string(forKey: "bike.bikeName") ?? "내 자전거"
+
+    /// 속도 센서 휠 둘레(미터). 워치 설정·참고용(실제 CSC 는 워치 OS 가 처리).
+    @Published var wheelCircumferenceMeters: Double = (UserDefaults.standard.object(forKey: "bike.wheelCircumference") as? Double) ?? 2.105 {
+        didSet { UserDefaults.standard.set(wheelCircumferenceMeters, forKey: "bike.wheelCircumference") }
+    }
+
+    /// 라이딩 설정을 저장한다(이름·자전거·휠 둘레·코스·자동 일시정지).
+    func saveSettings() {
+        UserDefaults.standard.set(routeName, forKey: "bike.routeName")
+        UserDefaults.standard.set(bikeName, forKey: "bike.bikeName")
+        UserDefaults.standard.set(wheelCircumferenceMeters, forKey: "bike.wheelCircumference")
+        persistCourses()
+    }
 
     /// 코스(경로) 목록 — 기본 출근/퇴근, 사용자가 만들어 추가·삭제. UserDefaults 영속.
     @Published var courses: [String] = UserDefaults.standard.stringArray(forKey: "bike.courses") ?? ["출근", "퇴근"]
@@ -132,7 +144,9 @@ final class RideSession: ObservableObject {
     }
 
     // 상태
-    @Published private(set) var state: RideState = .idle
+    @Published private(set) var state: RideState = .idle {
+        didSet { updateScreenAwake() }
+    }
     @Published private(set) var clock: Date = Date()
 
     // 누적/계산 지표 (표시는 항상 단위 변환 후)
@@ -165,36 +179,22 @@ final class RideSession: ObservableObject {
             .autoconnect()
             .sink { [weak self] _ in self?.tick() }
 
-        // 속도: 워치(주) → 폰 BLE 센서 → GPS 순으로 수용(우선순위는 ingestSpeed 가 판정).
+        // 속도: 워치(페어링된 CSC) → GPS 폴백.
         watch.$watchSpeedMps
             .compactMap { $0 }
             .sink { [weak self] v in self?.ingestSpeed(v, fromSource: .watch) }
-            .store(in: &cancellables)
-
-        bluetooth.$wheelSpeedMetersPerSecond
-            .compactMap { $0 }
-            .sink { [weak self] v in self?.ingestSpeed(v, fromSource: .bleSensor) }
             .store(in: &cancellables)
 
         location.$gpsSpeedMetersPerSecond
             .sink { [weak self] v in self?.ingestSpeed(v, fromSource: .gps) }
             .store(in: &cancellables)
 
-        // 케이던스: 워치(주) → 폰 BLE 센서.
+        // 케이던스·심박: 애플워치만.
         watch.$watchCadenceRPM
-            .sink { [weak self] rpm in self?.ingestCadence(rpm, fromWatch: true) }
+            .sink { [weak self] rpm in self?.ingestCadence(rpm) }
             .store(in: &cancellables)
 
-        bluetooth.$cadenceRPM
-            .sink { [weak self] rpm in self?.ingestCadence(rpm, fromWatch: false) }
-            .store(in: &cancellables)
-
-        // 심박수: 애플워치(주) + BLE 심박 스트랩(보조) 둘 다 수용.
         watch.$heartRateBPM
-            .sink { [weak self] bpm in self?.ingestHeartRate(bpm) }
-            .store(in: &cancellables)
-
-        bluetooth.$heartRateBPM
             .sink { [weak self] bpm in self?.ingestHeartRate(bpm) }
             .store(in: &cancellables)
 
@@ -214,6 +214,24 @@ final class RideSession: ObservableObject {
         health.start()   // Apple Health 누적 거리 관찰 시작
     }
 
+    deinit {
+        DispatchQueue.main.async {
+            UIApplication.shared.isIdleTimerDisabled = false
+        }
+    }
+
+    /// 라이딩 중(running/paused)에는 화면 자동 잠금을 끈다.
+    func refreshScreenAwake() {
+        updateScreenAwake()
+    }
+
+    private func updateScreenAwake() {
+        let keepAwake = state != .idle
+        DispatchQueue.main.async {
+            UIApplication.shared.isIdleTimerDisabled = keepAwake
+        }
+    }
+
     // MARK: - 라이딩 제어 (Start / Pause / Done)
 
     func start() {
@@ -221,7 +239,6 @@ final class RideSession: ObservableObject {
         case .idle:
             resetRide()
             startedAt = Date()
-            bluetooth.resetAccumulators()
             location.startRecording()
             watch.startWatchWorkout()   // 워치 워크아웃(심박·속도·케이던스) 시작
             state = .running
@@ -398,7 +415,7 @@ final class RideSession: ObservableObject {
         if currentSpeedMps >= movingSpeedThresholdMps {
             movingSeconds += 0.5
         }
-        // 거리는 항상 폰 GPS 기준(워치/BLE 속도는 표시용).
+        // 거리는 항상 폰 GPS 기준(워치 속도는 표시·자동일시정지용).
         distanceMeters = location.distanceMeters
 
         // 자동 일시정지: 바퀴가 임계 미만으로 일정 시간 멈춰 있으면 일시정지.
@@ -419,37 +436,22 @@ final class RideSession: ObservableObject {
 
     private let speedFreshness: TimeInterval = 5   // 이 시간 내 값이면 "최근"으로 간주
     private var lastSpeedAt: [SpeedSource: Date] = [:]
-    private var lastWatchCadenceAt: Date?
-
     private func isFresh(_ source: SpeedSource, _ now: Date) -> Bool {
         guard let t = lastSpeedAt[source] else { return false }
         return now.timeIntervalSince(t) <= speedFreshness
     }
 
-    /// 속도 표시: 워치 > 폰 BLE 센서 > GPS. 상위 우선순위 소스가 최근 값을 보냈으면 하위는 무시.
+    /// 속도 표시: 워치 > GPS. 워치 값이 최근이면 GPS 는 무시.
     private func ingestSpeed(_ mps: Double, fromSource source: SpeedSource) {
         let now = Date()
         lastSpeedAt[source] = now
-        switch source {
-        case .gps where isFresh(.watch, now) || isFresh(.bleSensor, now):
-            return
-        case .bleSensor where isFresh(.watch, now):
-            return
-        default:
-            break
-        }
+        if source == .gps, isFresh(.watch, now) { return }
         currentSpeedMps = mps
         if mps > maxSpeedMps { maxSpeedMps = mps }
     }
 
-    /// 케이던스 표시: 워치 우선, 워치 값이 최근이면 폰 BLE 값은 무시.
-    private func ingestCadence(_ rpm: Int?, fromWatch: Bool) {
-        let now = Date()
-        if fromWatch {
-            lastWatchCadenceAt = now
-        } else if let t = lastWatchCadenceAt, now.timeIntervalSince(t) <= speedFreshness {
-            return
-        }
+    /// 케이던스: 워치에서만 수신.
+    private func ingestCadence(_ rpm: Int?) {
         cadence = rpm
         if let rpm, rpm > 0 {
             maxCadence = max(maxCadence ?? 0, rpm)

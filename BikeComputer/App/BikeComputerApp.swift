@@ -21,7 +21,6 @@ struct BikeComputerApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(session)
-                .environmentObject(session.bluetooth)
                 .preferredColorScheme(.dark)
         }
     }

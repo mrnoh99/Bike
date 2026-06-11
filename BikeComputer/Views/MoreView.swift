@@ -38,12 +38,6 @@ struct MoreView: View {
                 }
                 Section("센서") {
                     HStack {
-                        Text("블루투스")
-                        Spacer()
-                        Text(session.bluetooth.poweredOn ? "켜짐" : "꺼짐")
-                            .foregroundColor(session.bluetooth.poweredOn ? Theme.green : Theme.red)
-                    }
-                    HStack {
                         Text("위치 권한")
                         Spacer()
                         Text(session.location.authorized ? "허용됨" : "필요")
@@ -93,7 +87,7 @@ struct MoreView: View {
                     HStack { Text("버전"); Spacer(); Text("1.0").foregroundColor(.secondary) }
                     HStack { Text("디자인"); Spacer(); Text("Designed by Jaisung NOH MD 2026").foregroundColor(.secondary) }
                 } footer: {
-                    Text("속도·케이던스는 애플워치에 페어링한 BLE 센서(워치 설정 > 블루투스)를 통해 받고, 워치가 없을 때만 폰이 직접 BLE(CSC, 0x1816)·GPS 로 측정합니다. 라이딩은 Apple 건강 앱에 운동으로 기록되며 누적 거리는 건강 데이터 기준입니다.")
+                    Text("속도·케이던스는 워치에 페어링한 BLE 센서(워치 설정 > 블루투스)만 사용합니다. 아이폰은 센서에 직접 연결하지 않고, 거리·경로는 GPS 로 기록합니다.")
                 }
             }
             .navigationTitle("More")
@@ -118,6 +112,5 @@ struct MoreView: View {
     let session = RideSession.preview
     return MoreView()
         .environmentObject(session)
-        .environmentObject(session.bluetooth)
         .preferredColorScheme(.dark)
 }

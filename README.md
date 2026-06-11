@@ -51,7 +51,7 @@
 - **iCloud 동기화**: 앱 iCloud 컨테이너를 iCloud Drive 에 **`BikeCom`** 폴더로 표시
   (`NSUbiquitousContainers` / `NSUbiquitousContainerName`). 그 안에 `rides.json`(상세+경로)과 `GPX/` 저장 →
   기기 간 동기화. iCloud 미사용 시 로컬 Documents 폴백. (Xcode 에서 **iCloud > iCloud Documents** Capability +
-  컨테이너 `iCloud.com.example.bikecomputer` 설정 필요)
+  컨테이너 `iCloud.com.jaisungnoh.bikecomputer` 설정 필요)
 - 백그라운드에서도 블루투스·위치 계속 기록(`UIBackgroundModes`).
 
 ### 애플워치 측정 (watchOS 컴패니언 앱)
@@ -91,9 +91,12 @@ HKWorkout 을 저장한다(둘 중 하나만 저장해 이중 계산 방지).
 
 ```bash
 brew install xcodegen      # 최초 1회
-xcodegen generate          # project.yml → BikeComputer.xcodeproj 생성
+./scripts/build.sh         # xcodegen + (필요 시 watchOS 런타임) + 빌드
 open BikeComputer.xcodeproj # Xcode 에서 실 기기로 실행
 ```
+
+> 워치 컴패니언 앱이 포함되어 **watchOS 시뮬레이터 런타임**이 필요하다.
+> 없으면 `xcodebuild -downloadPlatform watchOS` 로 설치하거나 `./scripts/build.sh` 가 자동 시도한다.
 
 > 블루투스·GPS 는 **실제 기기**에서만 동작한다(시뮬레이터 불가). 서명 팀(`DEVELOPMENT_TEAM`)을
 > Xcode 의 Signing & Capabilities 에서 본인 계정으로 지정한 뒤 실행한다.
