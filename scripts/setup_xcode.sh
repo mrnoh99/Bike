@@ -18,7 +18,9 @@ if ! command -v xcodegen >/dev/null 2>&1; then
 fi
 
 echo "==> 1/3 Xcode 프로젝트 생성 (project.yml → BikeComputer.xcodeproj)"
+echo "   (Xcode가 열려 있으면 닫고 실행하세요 — Watch 스킴 자동 생성 방지)"
 xcodegen generate
+./scripts/prune_watch_scheme.sh
 
 echo "==> 2/3 Watch 타깃 확인"
 if ! "$XCODEBUILD" -project BikeComputer.xcodeproj -list 2>/dev/null | grep -q BikeComputerWatch; then
@@ -59,8 +61,8 @@ open BikeComputer.xcodeproj
 cat <<'EOF'
 
 다음 단계 (Xcode):
-  1. 상단 스킴: BikeComputer  (BikeComputerWatch 아님)
-  2. 기기: 본인 iPhone (시뮬레이터 X)
+  1. 상단 스킴: BikeComputer 만 보여야 함 (BikeComputerWatch 보이면 Xcode 종료 → xcodegen generate)
+  2. 기기: 본인 iPhone (시뮬레이터 X, Watch 단독 선택 X)
   3. 왼쪽 파란 아이콘 BikeComputer → TARGETS:
        BikeComputer        ← iPhone
        BikeComputerWatch   ← Watch (둘 다 있어야 함)

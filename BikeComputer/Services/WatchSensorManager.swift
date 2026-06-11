@@ -10,6 +10,8 @@ final class WatchSensorManager: NSObject, ObservableObject {
     @Published private(set) var watchCadenceRPM: Int?
     @Published private(set) var watchReachable = false
     @Published private(set) var sessionActivated = false
+    @Published private(set) var watchPaired = false
+    @Published private(set) var watchAppInstalled = false
     @Published private(set) var authorized = false
     @Published private(set) var speedSensorConnected = false
     @Published private(set) var cadenceSensorConnected = false
@@ -277,22 +279,38 @@ extension WatchSensorManager: WCSessionDelegate {
         DispatchQueue.main.async {
             self.sessionActivated = state == .activated
             self.watchReachable = session.isReachable
+            self.watchPaired = session.isPaired
+            self.watchAppInstalled = session.isWatchAppInstalled
             if let error {
                 self.lastError = error.localizedDescription
                 self.statusMessage = "Watch 연결 오류"
             } else if state == .activated {
-                self.statusMessage = session.isPaired ? "Watch 연결됨" : "Watch 미페어링"
+                self.statusMessage = self.companionStatusMessage(session: session)
                 let ctx = session.receivedApplicationContext
                 if !ctx.isEmpty { self.handle(ctx) }
             }
         }
     }
 
+    private func companionStatusMessage(session: WCSession) -> String {
+        if !session.isPaired { return "Watch 미페어링" }
+        if !session.isWatchAppInstalled {
+            return "Watch 앱 미설치 — iPhone Watch 앱에서 설치 ON"
+        }
+        return session.isReachable ? "Watch 연결됨" : "Watch 설치됨(백그라운드)"
+    }
+
     func sessionDidBecomeInactive(_ session: WCSession) {}
     func sessionDidDeactivate(_ session: WCSession) { session.activate() }
 
     func sessionReachabilityDidChange(_ session: WCSession) {
-        DispatchQueue.main.async { self.watchReachable = session.isReachable }
+        DispatchQueue.main.async {
+            self.watchReachable = session.isReachable
+            self.watchAppInstalled = session.isWatchAppInstalled
+            if self.sessionActivated {
+                self.statusMessage = self.companionStatusMessage(session: session)
+            }
+        }
     }
 
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {

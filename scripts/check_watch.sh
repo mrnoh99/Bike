@@ -12,6 +12,7 @@ XCODEBUILD="${DEVELOPER_DIR}/usr/bin/xcodebuild"
 
 echo "==> xcodegen"
 xcodegen generate
+./scripts/prune_watch_scheme.sh
 
 echo "==> 타깃 확인"
 "$XCODEBUILD" -project BikeComputer.xcodeproj -list | grep -E 'Targets:|BikeComputer'
@@ -56,10 +57,7 @@ if ! plutil -extract WKApplication raw "$WATCH/Info.plist" 2>/dev/null | grep -q
 fi
 echo "✓ WKApplication: true"
 
-if ! /usr/libexec/PlistBuddy -c "Print :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName" "$WATCH/Info.plist" >/dev/null 2>&1; then
-  echo "❌ CFBundleIconName 없음 — 실기기 설치 실패 원인"
-  exit 1
-fi
+"$ROOT/scripts/ensure_watch_icon_plist.sh" "$WATCH/Info.plist"
 ICON_NAME=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName" "$WATCH/Info.plist")
 echo "✓ CFBundleIconName: $ICON_NAME"
 
@@ -68,7 +66,8 @@ echo "✅ 빌드 OK — Watch 앱은 iPhone 앱 안에 포함되어 있습니다
 echo ""
 echo "⚠️  check_watch.sh 는 기기에 설치하지 않습니다."
 echo "실기기 설치:"
-echo "  1) Xcode: BikeComputer 스킴 → iPhone → Team 서명 → ⌘R"
-echo "  2) 또는: ./scripts/install_device.sh <iPhone-UDID>"
-echo "  3) iPhone Watch 앱 → 일반 → BikeComputer → 설치 ON"
-echo "  4) Watch: 설정 → 개발자 모드 ON (최초 1회)"
+echo "  1) Xcode: BikeComputer 스킴 → iPhone → Team 서명 → ⌘R (Watch 스킴 직접 Run 금지)"
+echo "  2) 또는: ./scripts/install_device.sh <iPhone-UDID>  (iPhone+Watch 동시 설치)"
+echo "  3) 문제 시: ./scripts/diagnose_install.sh"
+echo "  4) iPhone Watch 앱 → 일반 → BikeComputer → 설치 ON"
+echo "  5) Watch: 설정 → 개발자 모드 ON (최초 1회)"

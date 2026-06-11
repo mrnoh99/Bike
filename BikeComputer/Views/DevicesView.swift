@@ -13,6 +13,10 @@ struct DevicesView: View {
                     Text(session.watch.watchReachable ? "연결됨" : "대기 중")
                         .foregroundColor(session.watch.watchReachable ? Theme.green : .secondary)
                 }
+                sensorRow("페어링", value: session.watch.watchPaired ? "됨" : "안 됨",
+                            active: session.watch.watchPaired)
+                sensorRow("Watch 앱", value: session.watch.watchAppInstalled ? "설치됨" : "미설치",
+                            active: session.watch.watchAppInstalled)
                 sensorRow("WatchConnectivity", value: session.watch.sessionActivated ? "활성" : "비활성",
                             active: session.watch.sessionActivated)
                 sensorRow("상태", value: session.watch.statusMessage, active: session.watch.didReceiveWatchDataThisRide)
@@ -26,10 +30,10 @@ struct DevicesView: View {
                 Text("Apple Watch")
             } footer: {
                 Text("""
-                Watch 설치: 1) xcodegen generate  2) Xcode BikeComputer 스킴 → Team 서명 → iPhone Run(⌘R)  \
-                3) iPhone Watch 앱 → 일반 → BikeComputer → 설치 ON  4) 실패 시 iPhone·Watch에서 앱 삭제 후 재설치. \
-                ./scripts/build.sh 는 서명 없이 빌드만 합니다. \
-                BLE 센서는 워치 설정 > 블루투스에서 페어링하세요.
+                정식 설치: ./scripts/install_device.sh <iPhone-UDID> 또는 BikeComputer 스킴 → iPhone → ⌘R. \
+                Watch 단독 Run 금지(연동 안 됨·iPhone 재설치 시 Watch 앱 삭제됨). \
+                Devices 에 "Watch 앱: 설치됨" 이어야 심박·속도 연동됩니다. \
+                미설치 시 iPhone Watch 앱 → 일반 → BikeComputer → 설치 ON.
                 """)
             }
 

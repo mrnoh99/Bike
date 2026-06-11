@@ -17,6 +17,9 @@ options:
       || (echo "error: Watch embed must use PlugIns (dstSubfolderSpec=13)" && exit 1)
     grep -q 'CodeSignOnCopy' BikeComputer.xcodeproj/project.pbxproj \
       || (echo "error: Watch embed must use CodeSignOnCopy" && exit 1)
+    grep -q 'SKIP_INSTALL = YES' BikeComputer.xcodeproj/project.pbxproj \
+      || (echo "error: BikeComputerWatch must have SKIP_INSTALL=YES" && exit 1)
+    "${PWD}/scripts/prune_watch_scheme.sh"
 
 schemes:
   BikeComputer:
@@ -28,12 +31,8 @@ schemes:
       config: Debug
     archive:
       config: Release
-  BikeComputerWatch:
-    build:
-      targets:
-        BikeComputerWatch: all
-    run:
-      config: Debug
+  # Watch 는 BikeComputer(iPhone) 설치 시 PlugIns 에 함께 들어갑니다.
+  # BikeComputerWatch 스킴은 제거 — Watch 단독 Run 시 연동 불가·재설치 시 삭제됨.
 
 settings:
   base:
@@ -105,10 +104,7 @@ targets:
             echo "error: Watch Assets.car missing — app icon not compiled"
             exit 1
           fi
-          if ! /usr/libexec/PlistBuddy -c "Print :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName" "$WATCH_APP/Info.plist" >/dev/null 2>&1; then
-            echo "error: Watch CFBundleIconName missing — install will fail on device"
-            exit 1
-          fi
+          "${SRCROOT}/scripts/ensure_watch_icon_plist.sh" "${WATCH_APP}/Info.plist"
 
   # 애플워치 컴패니언 앱 (실시간 심박 측정)
   BikeComputerWatch:
@@ -120,9 +116,6 @@ targets:
       path: BikeComputerWatch/Info.plist
       properties:
         CFBundleDisplayName: BikeComputer
-        CFBundleIcons:
-          CFBundlePrimaryIcon:
-            CFBundleIconName: AppIcon
         NSHealthShareUsageDescription: "라이딩 중 심박·속도·케이던스를 측정합니다."
         NSHealthUpdateUsageDescription: "워크아웃 세션을 Apple 건강에 기록합니다."
         WKApplication: true
@@ -138,4 +131,9 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
         INFOPLIST_KEY_CFBundleIconName: AppIcon
+        # YES: iPhone 앱 번들에만 포함·설치. NO 이면 Watch 단독 디버그 설치(재부팅 후 사라짐).
+        SKIP_INSTALL: YES
         TARGETED_DEVICE_FAMILY: "4"
+    postBuildScripts:
+      - name: Ensure Watch Icon Plist
+        script: "${SRCROOT}/scripts/ensure_watch_icon_plist.sh"
