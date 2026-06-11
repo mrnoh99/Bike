@@ -56,6 +56,13 @@ if ! plutil -extract WKApplication raw "$WATCH/Info.plist" 2>/dev/null | grep -q
 fi
 echo "✓ WKApplication: true"
 
+if ! /usr/libexec/PlistBuddy -c "Print :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName" "$WATCH/Info.plist" >/dev/null 2>&1; then
+  echo "❌ CFBundleIconName 없음 — 실기기 설치 실패 원인"
+  exit 1
+fi
+ICON_NAME=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName" "$WATCH/Info.plist")
+echo "✓ CFBundleIconName: $ICON_NAME"
+
 echo ""
 echo "✅ 빌드 OK — Watch 앱은 iPhone 앱 안에 포함되어 있습니다."
 echo ""
