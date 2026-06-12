@@ -57,8 +57,46 @@ final class RideSession: ObservableObject {
         }
     }
 
+    /// Routes 통합 정리 — 우선순위로 개별 코스를 채운 뒤 5km 이하 일괄 삭제.
+    /// 1) 앱에서 직접 Done(최우선) → 2) 중복 없는 Apple 건강 → 3) 중복 없는 Cyclemeter CSV.
+    func consolidateRoutes(minKeepKm: Double = 5) {
+        importStatus = "기록 통합 정리 중…"
+        // 1순위: 앱 직접 기록(레거시 nil 포함) + 사용자 GPX 가져오기 → 그대로 유지.
+        let priority1 = store.records.filter {
+            let s = $0.source ?? .app
+            return s == .app || s == .gpx
+        }
+        healthImporter.importCyclingWorkouts { [weak self] healthRides in
+            guard let self else { return }
+            // 3순위: 번들 Cyclemeter 요약 CSV.
+            var csv: [RideRecord] = []
+            if let url = Bundle.main.url(forResource: "CyclemeterBaseline", withExtension: "csv"),
+               let data = try? Data(contentsOf: url) {
+                csv = CSVImporter.parse(data: data, fallbackName: "Cyclemeter")
+            }
+            DispatchQueue.main.async {
+                var result = priority1
+                func addNonDuplicate(_ list: [RideRecord]) {
+                    for r in list where !result.contains(where: { RideRecordMerge.isDuplicate(r, of: $0) }) {
+                        result.append(r)
+                    }
+                }
+                addNonDuplicate(healthRides)   // 2순위
+                addNonDuplicate(csv)           // 3순위
+                let before = result.count
+                result = result.filter { $0.distanceMeters > minKeepKm * 1000 }
+                let removed = before - result.count
+                result.sort { $0.startedAt > $1.startedAt }
+                self.store.replaceAll(result)
+                self.health.refreshTotals()
+                self.importStatus = "정리 완료: \(result.count)개 기록 · 5km 이하 \(removed)개 삭제 (건강 \(healthRides.count) · CSV \(csv.count) 후보)"
+            }
+        }
+    }
+
     /// 선택한 GPX 파일/폴더(들)에서 라이딩을 일괄 가져온다(Cyclemeter 마이그레이션).
-    func importGPX(from urls: [URL]) {
+    /// 선택한 GPX·CSV 파일/폴더(들)에서 라이딩을 일괄 가져온다.
+    func importRideFiles(from urls: [URL]) {
         importStatus = "가져오는 중…"
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
@@ -72,15 +110,24 @@ final class RideSession: ObservableObject {
                 var files: [URL] = []
                 if isDir.boolValue {
                     if let en = FileManager.default.enumerator(at: url, includingPropertiesForKeys: nil) {
-                        for case let f as URL in en where f.pathExtension.lowercased() == "gpx" { files.append(f) }
+                        for case let f as URL in en {
+                            let ext = f.pathExtension.lowercased()
+                            if ext == "gpx" || ext == "csv" { files.append(f) }
+                        }
                     }
                 } else {
                     files = [url]
                 }
                 for f in files {
-                    if let data = try? Data(contentsOf: f),
-                       let rec = GPXImporter.parse(data: data, fallbackName: f.deletingPathExtension().lastPathComponent) {
-                        parsed.append(rec)
+                    guard let data = try? Data(contentsOf: f) else { continue }
+                    let name = f.deletingPathExtension().lastPathComponent
+                    switch f.pathExtension.lowercased() {
+                    case "gpx":
+                        if let rec = GPXImporter.parse(data: data, fallbackName: name) { parsed.append(rec) }
+                    case "csv":
+                        parsed.append(contentsOf: CSVImporter.parse(data: data, fallbackName: name))
+                    default:
+                        break
                     }
                 }
             }
@@ -93,6 +140,8 @@ final class RideSession: ObservableObject {
             }
         }
     }
+
+    func importGPX(from urls: [URL]) { importRideFiles(from: urls) }
 
     // 라벨(스크린샷의 "1.출근길" / "6.Yeti" 자리)
     @Published var routeName: String = UserDefaults.standard.string(forKey: "bike.routeName") ?? "1.라이딩"
@@ -290,6 +339,8 @@ final class RideSession: ObservableObject {
         let avgSpeed = rideSeconds > 1 ? distanceMeters / rideSeconds : 0   // 라이딩 시간 기준
         return RideRecord(
             name: routeName,
+            bikeName: bikeName,
+            source: .app,
             startedAt: started,
             duration: rideSeconds,
             totalElapsed: totalSeconds,
@@ -344,19 +395,17 @@ final class RideSession: ObservableObject {
     // 누적 거리: Apple Health 기준(권한 허용 시), 미인증 시 로컬 기록으로 폴백.
     // 진행 중 라이딩은 아직 Health 미저장이므로 현재 거리(distanceMeters)를 더해 실시간 표시.
     var thisMonthDistance: Double {
-        unit.distance(fromMeters: cumulative(health.thisMonthMeters, store.thisMonthMeters))
+        unit.distance(fromMeters: routeBased(store.thisMonthMeters))
     }
     var thisYearDistance: Double {
-        unit.distance(fromMeters: cumulative(health.thisYearMeters, store.thisYearMeters))
+        unit.distance(fromMeters: routeBased(store.thisYearMeters))
     }
     var totalDistance: Double {
-        unit.distance(fromMeters: cumulative(health.totalMeters, store.totalMeters))
+        unit.distance(fromMeters: routeBased(store.totalMeters))
     }
 
-    private func cumulative(_ healthMeters: Double, _ storeMeters: Double) -> Double {
-        let base = health.hasHealthData ? healthMeters : storeMeters
-        let inProgress = state == .idle ? 0 : distanceMeters
-        return base + inProgress
+    private func routeBased(_ storeMeters: Double) -> Double {
+        storeMeters + (state == .idle ? 0 : distanceMeters)
     }
 
     /// 총 라이딩 시간(초) — Cyclemeter(로컬 JSON 기록) + Apple 건강 워크아웃을

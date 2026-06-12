@@ -1,14 +1,8 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
-/// More 탭 — 센서·정보·데이터 가져오기 등 기타 설정.
+/// More 탭 — 센서·정보 등 기타 설정. (데이터 가져오기/정리는 Routes 첫 페이지로 이동)
 struct MoreView: View {
     @EnvironmentObject var session: RideSession
-    @State private var showImporter = false
-
-    private var gpxTypes: [UTType] {
-        [UTType(filenameExtension: "gpx") ?? .xml, .xml, .folder]
-    }
 
     var body: some View {
         List {
@@ -43,7 +37,7 @@ struct MoreView: View {
                 } header: {
                     Text("누적 통계")
                 } footer: {
-                    Text("총 라이딩 시간은 Cyclemeter(번들·가져온 기록)와 Apple 건강의 사이클링 운동을 시작 시각 기준으로 중복 없이 합산합니다.")
+                    Text("총 라이딩 시간은 Cyclemeter(가져온 JSON 기록)와 Apple 건강의 사이클링 운동을 시작 시각 기준으로 중복 없이 합산합니다.")
                 }
                 Section("센서") {
                     HStack {
@@ -72,40 +66,14 @@ struct MoreView: View {
                     }
                 }
                 Section {
-                    Button {
-                        session.importStatus = nil
-                        session.importFromHealth()
-                    } label: {
-                        Label("Apple 건강에서 가져오기", systemImage: "heart.text.square")
-                    }
-                    Button {
-                        session.importStatus = nil
-                        showImporter = true
-                    } label: {
-                        Label("Cyclemeter GPX 가져오기", systemImage: "square.and.arrow.down")
-                    }
-                    if let status = session.importStatus {
-                        Text(status).font(.caption).foregroundColor(.secondary)
-                    }
-                } header: {
-                    Text("데이터 가져오기")
-                } footer: {
-                    Text("이미 Apple 건강에 있는 사이클링 운동은 '건강에서 가져오기'로 경로·심박과 함께 Routes 에 채웁니다. 건강에 없거나 경로가 빠진 오래된 기록은 Cyclemeter 에서 GPX 로 내보낸 뒤 여러 파일/폴더를 선택해 가져오세요. 같은 시작 시각은 중복 제외됩니다.")
-                }
-                Section {
                     HStack { Text("버전"); Spacer(); Text("1.0").foregroundColor(.secondary) }
                     HStack { Text("디자인"); Spacer(); Text("Designed by Jaisung NOH MD 2026").foregroundColor(.secondary) }
                 } footer: {
-                    Text("속도·케이던스는 워치에 페어링한 BLE 센서(워치 설정 > 블루투스)만 사용합니다. 아이폰은 센서에 직접 연결하지 않고, 거리·경로는 GPS 로 기록합니다.")
+                    Text("데이터 가져오기·기록 통합 정리는 Routes(라이딩 기록) 첫 페이지의 ⤓ 메뉴로 옮겼습니다. 속도·케이던스는 워치에 페어링한 BLE 센서만 사용합니다.")
                 }
             }
             .navigationTitle("More")
             .navigationBarTitleDisplayMode(.inline)
-            .fileImporter(isPresented: $showImporter,
-                          allowedContentTypes: gpxTypes,
-                          allowsMultipleSelection: true) { result in
-                if case .success(let urls) = result { session.importGPX(from: urls) }
-            }
     }
 
     private func statRow(_ label: String, _ value: Double) -> some View {
@@ -117,9 +85,10 @@ struct MoreView: View {
     }
 }
 
+#if DEBUG
 #Preview {
-    let session = RideSession.preview
-    return MoreView()
-        .environmentObject(session)
+    MoreView()
+        .environmentObject(RideSession.preview)
         .preferredColorScheme(.dark)
 }
+#endif
