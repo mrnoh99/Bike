@@ -17,6 +17,7 @@ final class WorkoutManager: NSObject, ObservableObject {
     @Published var avgHeartRate: Int = 0
     @Published var speedMps: Double = 0
     @Published var avgSpeedMps: Double = 0
+    @Published var cadenceRPM: Int = 0
     @Published var distanceMeters: Double = 0
     @Published var speedSensorConnected = false
     @Published var cadenceSensorConnected = false
@@ -194,6 +195,7 @@ final class WorkoutManager: NSObject, ObservableObject {
             self.isRunning = false
             self.heartRate = 0
             self.speedMps = 0
+            self.cadenceRPM = 0
             self.speedSensorConnected = false
             self.cadenceSensorConnected = false
         }
@@ -282,6 +284,7 @@ final class WorkoutManager: NSObject, ObservableObject {
             self.avgHeartRate = 0
             self.speedMps = 0
             self.avgSpeedMps = 0
+            self.cadenceRPM = 0
             self.distanceMeters = 0
             self.speedSensorConnected = false
             self.cadenceSensorConnected = false
@@ -390,8 +393,10 @@ extension WorkoutManager: HKLiveWorkoutBuilderDelegate {
         if let cadType = HKQuantityType.quantityType(forIdentifier: .cyclingCadence),
            collectedTypes.contains(cadType),
            let q = workoutBuilder.statistics(for: cadType)?.mostRecentQuantity() {
-            latestCadenceRPM = Int(q.doubleValue(for: bpmUnit).rounded())
+            let rpm = Int(q.doubleValue(for: bpmUnit).rounded())
+            latestCadenceRPM = rpm
             lastCadenceSampleAt = Date()
+            DispatchQueue.main.async { self.cadenceRPM = rpm }
         }
         var totalMeters: Double?
         if let dType = HKQuantityType.quantityType(forIdentifier: .distanceCycling),

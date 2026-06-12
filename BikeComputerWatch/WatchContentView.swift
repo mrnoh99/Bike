@@ -1,138 +1,156 @@
 import SwiftUI
 
-/// 워치 주행화면 — 실시간 심박 + 센서 연결 상태 + 평균 지표 + 시작/정지 + SpO2.
-/// 아이폰 Start 로 자동 실행되지만 워치에서 직접 시작할 수도 있다.
+/// 워치 주행화면 — Apple 피트니스 '실외 자전거' 스타일.
+/// 1) 현재 시각  2) 심박수  3) 속도(+연결등)  4) 케이던스(+연결등)  5) 시작/정지.
 struct WatchContentView: View {
     @EnvironmentObject var workout: WorkoutManager
 
     var body: some View {
+        TabView {
+            workoutPage
+            spo2Page
+        }
+        .tabViewStyle(.verticalPage)
+        .onAppear { workout.requestAuthorization() }
+    }
+
+    private var workoutPage: some View {
         ScrollView {
-            VStack(spacing: 8) {
-                heartRate
-
-                // 1·2·3. 속도/케이던스 센서 연결 상태
-                HStack(spacing: 10) {
-                    SensorBadge(title: "속도", on: workout.speedSensorConnected)
-                    SensorBadge(title: "케이던스", on: workout.cadenceSensorConnected)
+            VStack(alignment: .leading, spacing: 6) {
+                // 1) 현재 시각 (1초마다 갱신)
+                TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                    HStack(spacing: 4) {
+                        Image(systemName: "figure.outdoor.cycle")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.green)
+                        Text(Self.clock.string(from: ctx.date))
+                            .font(.system(size: 32, weight: .bold, design: .monospaced))
+                            .foregroundColor(.yellow)
+                            .contentTransition(.numericText())
+                            .minimumScaleFactor(0.6)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
                 }
 
-                // 4. 평균 속도 · 평균 심박 · 주행거리
-                HStack(spacing: 6) {
-                    MetricBox(title: "평균속도",
-                              value: String(format: "%.1f", workout.avgSpeedMps * 3.6),
-                              unit: "km/h", tint: .green)
-                    MetricBox(title: "평균심박",
-                              value: workout.avgHeartRate > 0 ? "\(workout.avgHeartRate)" : "--",
-                              unit: "bpm", tint: .red)
-                }
-                MetricBox(title: "주행거리",
-                          value: String(format: "%.2f", workout.distanceMeters / 1000),
-                          unit: "km", tint: .orange, wide: true)
+                divider
 
+                // 2) 심박수
+                MetricRow(value: workout.heartRate > 0 ? "\(workout.heartRate)" : "--",
+                          unit: "BPM", label: "심박수",
+                          color: .fitnessRed, icon: "heart.fill", light: nil,
+                          pulsing: workout.isRunning)
+
+                divider
+
+                // 3) 속도 + 연결등
+                MetricRow(value: workout.speedMps > 0 ? String(format: "%.1f", workout.speedMps * 3.6) : "--",
+                          unit: "KM/H", label: "속도",
+                          color: .fitnessGreen, icon: "speedometer",
+                          light: workout.speedSensorConnected)
+
+                divider
+
+                // 4) 케이던스 + 연결등
+                MetricRow(value: workout.cadenceRPM > 0 ? "\(workout.cadenceRPM)" : "--",
+                          unit: "RPM", label: "케이던스",
+                          color: .fitnessGreen, icon: "arrow.triangle.2.circlepath",
+                          light: workout.cadenceSensorConnected)
+
+                // 5) 시작/정지
                 Button {
                     workout.isRunning ? workout.stopWorkout() : workout.startWorkout()
                 } label: {
                     Text(workout.isRunning ? "정지" : "시작")
+                        .font(.system(size: 17, weight: .bold))
                         .frame(maxWidth: .infinity)
                 }
                 .tint(workout.isRunning ? .red : .green)
-                .padding(.top, 2)
-
-                Divider().padding(.vertical, 2)
-
-                spo2Section
+                .padding(.top, 6)
             }
-            .padding()
-        }
-        .onAppear { workout.requestAuthorization() }
-    }
-
-    private var heartRate: some View {
-        VStack(spacing: 2) {
-            Image(systemName: "heart.fill")
-                .foregroundColor(.red)
-                .font(.title3)
-                .symbolEffect(.pulse, isActive: workout.isRunning)
-            Text(workout.heartRate > 0 ? "\(workout.heartRate)" : "--")
-                .font(.system(size: 48, weight: .bold, design: .rounded))
-                .foregroundColor(.red)
-                .contentTransition(.numericText())
-            Text("bpm")
-                .font(.caption2)
-                .foregroundColor(.secondary)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
         }
     }
 
-    // 휴식 중 SpO2 측정 (센서를 직접 켤 수 없어, 들어오는 측정값을 포착해 폰으로 전송)
-    private var spo2Section: some View {
-        VStack(spacing: 4) {
+    private var spo2Page: some View {
+        VStack(spacing: 8) {
+            Spacer(minLength: 0)
             HStack(spacing: 4) {
-                Image(systemName: "lungs.fill").foregroundColor(.cyan).font(.footnote)
+                Image(systemName: "lungs.fill").foregroundColor(.cyan)
                 Text(workout.spo2 > 0 ? "SpO₂ \(workout.spo2)%" : "SpO₂ --")
-                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
                     .foregroundColor(.cyan)
-                    .contentTransition(.numericText())
             }
-
             Button { workout.measureSpO2() } label: {
-                Label(workout.measuringSpO2 ? "측정 대기…" : "SpO₂ 측정",
-                      systemImage: "lungs.fill")
+                Label(workout.measuringSpO2 ? "측정 대기…" : "SpO₂ 측정", systemImage: "lungs.fill")
                     .frame(maxWidth: .infinity)
             }
             .tint(.cyan)
             .disabled(workout.measuringSpO2)
+            Spacer(minLength: 0)
+        }
+        .padding()
+    }
 
-            if workout.measuringSpO2 {
-                Text("팔을 가만히 두고 '혈중 산소' 앱에서 측정하세요. 측정값이 들어오면 자동으로 폰에 전송됩니다.")
-                    .font(.caption2)
+    private var divider: some View {
+        Rectangle().fill(Color.white.opacity(0.12)).frame(height: 1)
+    }
+
+    static let clock: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "HH:mm:ss"; return f
+    }()
+}
+
+private extension Color {
+    static let fitnessRed = Color(red: 1.0, green: 0.32, blue: 0.36)    // 심박
+    static let fitnessGreen = Color(red: 0.62, green: 0.86, blue: 0.20) // 속도·케이던스(피트니스 연두)
+}
+
+/// 피트니스 스타일 메트릭 한 줄 — 큰 색 숫자 + 작은 단위 + 라벨(+ 아이콘/연결등).
+private struct MetricRow: View {
+    let value: String
+    let unit: String?
+    let label: String
+    let color: Color
+    let icon: String?
+    /// nil 이면 연결등 없음. true=연결(초록), false=대기(회색).
+    let light: Bool?
+    var pulsing: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 4) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(color)
+                        .symbolEffect(.pulse, isActive: pulsing)
+                }
+                Text(label.uppercased())
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
+                if let light {
+                    Circle()
+                        .fill(light ? Color.green : Color.gray.opacity(0.5))
+                        .frame(width: 7, height: 7)
+                }
+                Spacer(minLength: 0)
+            }
+            HStack(alignment: .lastTextBaseline, spacing: 3) {
+                Text(value)
+                    .font(.system(size: 38, weight: .semibold, design: .rounded))
+                    .foregroundColor(color)
+                    .contentTransition(.numericText())
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+                if let unit {
+                    Text(unit)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.secondary)
+                }
+                Spacer(minLength: 0)
             }
         }
-    }
-}
-
-/// 센서 연결 상태 배지 — 연결 시 초록, 미연결 시 회색.
-private struct SensorBadge: View {
-    let title: String
-    let on: Bool
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(on ? Color.green : Color.gray.opacity(0.5))
-                .frame(width: 8, height: 8)
-            Text(title)
-                .font(.caption2)
-                .foregroundColor(on ? .primary : .secondary)
-        }
-        .padding(.vertical, 3)
-        .padding(.horizontal, 6)
-        .background(Color.white.opacity(on ? 0.12 : 0.04), in: Capsule())
-    }
-}
-
-/// 지표 박스 — 제목/값/단위.
-private struct MetricBox: View {
-    let title: String
-    let value: String
-    let unit: String
-    let tint: Color
-    var wide: Bool = false
-
-    var body: some View {
-        VStack(spacing: 1) {
-            Text(title).font(.caption2).foregroundColor(.secondary)
-            Text(value)
-                .font(.system(size: 22, weight: .semibold, design: .rounded))
-                .foregroundColor(tint)
-                .contentTransition(.numericText())
-                .minimumScaleFactor(0.6)
-                .lineLimit(1)
-            Text(unit).font(.system(size: 9)).foregroundColor(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 6)
-        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
     }
 }
