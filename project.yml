@@ -57,6 +57,12 @@ targets:
     platform: iOS
     sources:
       - path: BikeComputer
+        excludes:
+          - Resources/**
+      # 앱 기본 시드(트랙 포함 Cyclemeter 정제 데이터)만 번들에 포함.
+      # 문서용 CSV(CyclemeterRaw·SeedRidesClean)는 번들에서 제외(저장소 열람용).
+      - path: BikeComputer/Resources/SeedRides.json.gz
+        buildPhase: resources
     info:
       path: BikeComputer/App/Info.plist
       properties:
@@ -85,26 +91,33 @@ targets:
         INFOPLIST_KEY_UILaunchStoryboardName: LaunchScreen
         TARGETED_DEVICE_FAMILY: "1"
     dependencies:
+      # 워치 앱 의존성: copy destination 을 지정하지 않아야 XcodeGen 이 표준
+      # "Embed Watch Content"(Watch/) 단계를 만든다 — plugins 로 지정하면 설치 불가.
       - target: BikeComputerWatch
         embed: true
         codeSign: true
-        copy:
-          destination: plugins
       - package: GoogleMaps
         product: GoogleMaps
     postBuildScripts:
       - name: Verify Watch App Embed
         script: |
-          WATCH_APP="${TARGET_BUILD_DIR}/${WRAPPER_NAME}/PlugIns/BikeComputerWatch.app"
+          WATCH_APP="${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Watch/BikeComputerWatch.app"
           if [ ! -d "$WATCH_APP" ]; then
-            echo "error: BikeComputerWatch.app missing from PlugIns — run xcodegen generate"
+            echo "error: BikeComputerWatch.app missing from Watch/ — run xcodegen generate"
             exit 1
           fi
           if [ ! -f "$WATCH_APP/Assets.car" ]; then
             echo "error: Watch Assets.car missing — app icon not compiled"
             exit 1
           fi
-          "${SRCROOT}/scripts/ensure_watch_icon_plist.sh" "${WATCH_APP}/Info.plist"
+          if ! /usr/libexec/PlistBuddy -c "Print :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName" "$WATCH_APP/Info.plist" >/dev/null 2>&1; then
+            echo "error: Watch CFBundleIconName missing — install will fail on device"
+            exit 1
+          fi
+          if [ "$(/usr/libexec/PlistBuddy -c 'Print :WKApplication' "$WATCH_APP/Info.plist" 2>/dev/null)" != "true" ]; then
+            echo "error: Watch WKApplication != true — watchOS rejects install (single-target 워치 앱 필수 키)"
+            exit 1
+          fi
 
   # 애플워치 컴패니언 앱 (실시간 심박 측정)
   BikeComputerWatch:
