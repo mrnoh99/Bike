@@ -67,6 +67,12 @@ struct WatchContentView: View {
                 }
                 .tint(workout.isRunning ? .red : .green)
                 .padding(.top, 6)
+
+                Text("Developed by JaiSung NOH MD 2026")
+                    .font(.system(size: 9))
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .multilineTextAlignment(.center)
             }
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
@@ -123,17 +129,18 @@ private struct MetricRow: View {
             HStack(spacing: 4) {
                 if let icon {
                     Image(systemName: icon)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(color)
-                        .symbolEffect(.pulse, isActive: pulsing)
+                        .symbolEffect(.pulse, options: .repeating, isActive: pulsing)
                 }
                 Text(label.uppercased())
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.secondary)
                 if let light {
+                    // 연결등을 하트 아이콘과 같은 크기로 확대.
                     Circle()
                         .fill(light ? Color.green : Color.gray.opacity(0.5))
-                        .frame(width: 7, height: 7)
+                        .frame(width: 18, height: 18)
                 }
                 Spacer(minLength: 0)
             }

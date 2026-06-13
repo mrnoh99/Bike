@@ -16,6 +16,20 @@ enum SpeedSource {
     case gps
 }
 
+/// More 탭 데이터 출처 통계 (Cyclemeter 시드 = 기본, Health = 비중복 보충).
+struct DataStats {
+    var cyclemeterBase = 0        // 기본 Cyclemeter 시드(트랙 포함) 기록 수
+    var healthSupplemented = 0    // 겹치지 않아 보충된 건강 기록 수
+    var healthOverlap = 0         // 기본과 겹쳐 제외된 건강 워크아웃 수
+    var healthTotal = 0           // Apple 건강의 사이클링 워크아웃 총 수
+
+    var healthMonthKm = 0.0, healthYearKm = 0.0, healthTotalKm = 0.0   // 건강(보충분)만
+    var bothMonthKm = 0.0, bothYearKm = 0.0, bothTotalKm = 0.0         // Cyclemeter+건강
+
+    var firstHealthDate: Date?, firstHealthPlace = ""
+    var firstCycDate: Date?, firstCycPlace = ""
+}
+
 /// 대시보드의 모든 지표를 모으는 메인 뷰모델.
 /// 워치 센서 + GPS 를 결합해 거리·속도·심박·케이던스를 계산하고,
 /// 종료 시 RideStore 에 기록을 저장한다.
@@ -40,61 +54,94 @@ final class RideSession: ObservableObject {
     /// GPX 가져오기 진행/결과 표시.
     @Published var importStatus: String?
 
+    /// 데이터 출처 통계(More 탭). 백그라운드에서 계산해 발행.
+    @Published var dataStats: DataStats?
+
     /// 10분 미만 라이딩: 저장/삭제 결정 대기 중인 기록.
     @Published var pendingShortRide: RideRecord?
     /// 저장(건강·캘린더·파일) 완료 요약 — 확인 알림 표시용.
     @Published var saveSummary: String?
 
-    /// Apple 건강의 사이클링 워크아웃(경로·심박 포함)을 Routes 로 가져온다.
+    /// Apple 건강의 사이클링 워크아웃을 **겹치지 않는 것만 보충**한다(시드 트랙 데이터가 기본).
     func importFromHealth() {
         importStatus = "건강에서 가져오는 중…"
         healthImporter.importCyclingWorkouts { [weak self] records in
             guard let self else { return }
-            let existing = Set(self.store.records.map { Int($0.startedAt.timeIntervalSince1970) })
-            let fresh = records.filter { !existing.contains(Int($0.startedAt.timeIntervalSince1970)) }
-            self.store.addMany(fresh)
-            self.importStatus = "건강에서 가져오기 완료: \(fresh.count)개 추가 (워크아웃 \(records.count)개)"
+            // 기존 기록(시드 Cyclemeter 등)과 겹치지 않는 건강 기록만 추가.
+            let added = records.filter { r in
+                !self.store.records.contains(where: { RideRecordMerge.isDuplicate(r, of: $0) })
+            }
+            self.store.addMany(added)
+            self.importStatus = "건강 보충 완료: 겹치지 않는 \(added.count)개 추가 (워크아웃 \(records.count)개)"
+            self.refreshDataStats()
         }
     }
 
-    /// Routes 통합 정리 — 우선순위로 개별 코스를 채운 뒤 5km 이하 일괄 삭제.
-    /// 1) 앱에서 직접 Done(최우선) → 2) 중복 없는 Apple 건강 → 3) 중복 없는 Cyclemeter CSV.
+    /// Routes 통합 정리 — Cyclemeter 시드(트랙 포함)+앱·GPX 를 기본으로 두고
+    /// 겹치지 않는 Apple 건강 기록으로 보충, 5km 이하 일괄 삭제.
     func consolidateRoutes(minKeepKm: Double = 5) {
         importStatus = "기록 통합 정리 중…"
-        // 1순위: 앱 직접 기록(레거시 nil 포함) + 사용자 GPX 가져오기 → 그대로 유지.
-        let priority1 = store.records.filter {
+        // 기본: 앱 직접 기록 + GPX + Cyclemeter 시드(트랙 포함). (레거시 nil = 앱으로 간주)
+        let base = store.records.filter {
             let s = $0.source ?? .app
-            return s == .app || s == .gpx
+            return s == .app || s == .gpx || s == .cyclemeter
         }
         healthImporter.importCyclingWorkouts { [weak self] healthRides in
             guard let self else { return }
-            // 3순위: 번들 Cyclemeter 요약 CSV.
-            var csv: [RideRecord] = []
-            if let url = Bundle.main.url(forResource: "CyclemeterBaseline", withExtension: "csv"),
-               let data = try? Data(contentsOf: url) {
-                csv = CSVImporter.parse(data: data, fallbackName: "Cyclemeter")
-            }
             DispatchQueue.main.async {
-                var result = priority1
-                func addNonDuplicate(_ list: [RideRecord]) {
-                    for r in list where !result.contains(where: { RideRecordMerge.isDuplicate(r, of: $0) }) {
-                        result.append(r)
-                    }
+                var result = base
+                // 겹치지 않는 건강 기록 보충.
+                for r in healthRides where !result.contains(where: { RideRecordMerge.isDuplicate(r, of: $0) }) {
+                    result.append(r)
                 }
-                addNonDuplicate(healthRides)   // 2순위
-                addNonDuplicate(csv)           // 3순위
                 let before = result.count
                 result = result.filter { $0.distanceMeters > minKeepKm * 1000 }
                 let removed = before - result.count
                 result.sort { $0.startedAt > $1.startedAt }
                 self.store.replaceAll(result)
                 self.health.refreshTotals()
-                self.importStatus = "정리 완료: \(result.count)개 기록 · 5km 이하 \(removed)개 삭제 (건강 \(healthRides.count) · CSV \(csv.count) 후보)"
+                self.importStatus = "정리 완료: \(result.count)개 기록 · 5km 이하 \(removed)개 삭제 (건강 후보 \(healthRides.count))"
+                self.refreshDataStats()
             }
         }
     }
 
-    /// 선택한 GPX 파일/폴더(들)에서 라이딩을 일괄 가져온다(Cyclemeter 마이그레이션).
+    /// More 탭 데이터 출처 통계를 백그라운드에서 계산해 발행한다.
+    func refreshDataStats() {
+        let records = store.records
+        let healthTotal = health.rideWorkouts.count   // Apple 건강 사이클링 워크아웃 총 수
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            var st = DataStats()
+            let cal = Calendar.current
+            let now = Date()
+            func inMonth(_ d: Date) -> Bool { cal.isDate(d, equalTo: now, toGranularity: .month) }
+            func inYear(_ d: Date) -> Bool { cal.isDate(d, equalTo: now, toGranularity: .year) }
+            func km(_ rs: [RideRecord], _ pred: (Date) -> Bool) -> Double {
+                rs.filter { pred($0.startedAt) }.reduce(0) { $0 + $1.distanceMeters } / 1000
+            }
+
+            let health = records.filter { $0.source == .health }
+            let cyc = records.filter { $0.source == .cyclemeter }
+            st.cyclemeterBase = cyc.count
+            st.healthSupplemented = health.count
+            st.healthTotal = healthTotal
+            st.healthOverlap = max(0, healthTotal - health.count)
+
+            st.healthMonthKm = km(health, inMonth); st.healthYearKm = km(health, inYear); st.healthTotalKm = km(health) { _ in true }
+            let both = health + cyc
+            st.bothMonthKm = km(both, inMonth); st.bothYearKm = km(both, inYear); st.bothTotalKm = km(both) { _ in true }
+
+            if let fh = health.min(by: { $0.startedAt < $1.startedAt }) {
+                st.firstHealthDate = fh.startedAt; st.firstHealthPlace = fh.location ?? fh.name
+            }
+            if let fc = cyc.min(by: { $0.startedAt < $1.startedAt }) {
+                st.firstCycDate = fc.startedAt; st.firstCycPlace = fc.location ?? fc.name
+            }
+
+            DispatchQueue.main.async { self?.dataStats = st }
+        }
+    }
+
     /// 선택한 GPX·CSV 파일/폴더(들)에서 라이딩을 일괄 가져온다.
     func importRideFiles(from urls: [URL]) {
         importStatus = "가져오는 중…"
@@ -123,7 +170,9 @@ final class RideSession: ObservableObject {
                     let name = f.deletingPathExtension().lastPathComponent
                     switch f.pathExtension.lowercased() {
                     case "gpx":
-                        if let rec = GPXImporter.parse(data: data, fallbackName: name) { parsed.append(rec) }
+                        if let rec = GPXImporter.parse(data: data, fallbackName: name) {
+                            parsed.append(rec)
+                        }
                     case "csv":
                         parsed.append(contentsOf: CSVImporter.parse(data: data, fallbackName: name))
                     default:
@@ -132,7 +181,6 @@ final class RideSession: ObservableObject {
                 }
             }
             DispatchQueue.main.async {
-                // 시작시각(초)이 같은 기존 기록은 중복으로 보고 건너뛴다.
                 let existing = Set(self.store.records.map { Int($0.startedAt.timeIntervalSince1970) })
                 let fresh = parsed.filter { !existing.contains(Int($0.startedAt.timeIntervalSince1970)) }
                 self.store.addMany(fresh)
@@ -249,30 +297,29 @@ final class RideSession: ObservableObject {
         location.requestAuthorization()
         watch.requestAuthorization()
         health.start()   // Apple Health 누적 거리 관찰 시작
-        importBaselineHistoryIfNeeded()   // 번들된 Cyclemeter 기록 1회 가져오기
+        importBaselineHistoryIfNeeded()
     }
 
-    // MARK: - Cyclemeter 베이스라인(번들 CSV) 1회 가져오기
+    private static let baselineImportedKey = "bike.cyclemeterSeedV3"
 
-    private static let baselineImportedKey = "bike.cyclemeterBaselineV2"
-
-    /// 앱에 번들된 Cyclemeter 요약 CSV(V2: DB 추출 정제본)를 1회 주입한다.
-    /// 기존 Cyclemeter 기록은 제거 후 정제본으로 교체하고, 앱·건강·GPX 기록은 유지한다.
+    /// 앱 번들 Cyclemeter 시드(트랙 포함 JSON)를 1회 기본 기록으로 주입한다.
+    /// 기존 Cyclemeter 기록은 제거 후 시드로 교체하고, 앱·건강·GPX 기록은 유지한다.
     private func importBaselineHistoryIfNeeded() {
         guard !UserDefaults.standard.bool(forKey: Self.baselineImportedKey) else { return }
-        guard let url = Bundle.main.url(forResource: "CyclemeterBaseline", withExtension: "csv") else { return }
         DispatchQueue.global(qos: .utility).async { [weak self] in
-            guard let self, let data = try? Data(contentsOf: url) else { return }
-            let baseline = CSVImporter.parse(data: data, fallbackName: "Cyclemeter")
-            guard !baseline.isEmpty else { return }
+            guard let self else { return }
+            let seed = SeedRides.load()
+            guard !seed.isEmpty else { return }
             DispatchQueue.main.async {
+                // 기존 Cyclemeter 기록 제거 후 시드(트랙 포함) 주입. 앱·건강·GPX 기록은 유지.
                 let kept = self.store.records.filter { $0.source != .cyclemeter }
                 let merged = RideRecordMerge.merge(
                     existing: kept,
-                    incoming: baseline,
+                    incoming: seed,
                     incomingWins: false)
                 self.store.replaceAll(merged)
                 UserDefaults.standard.set(true, forKey: Self.baselineImportedKey)
+                self.refreshDataStats()
             }
         }
     }
@@ -394,8 +441,8 @@ final class RideSession: ObservableObject {
         guard rideSeconds > 1 else { return 0 }
         return unit.speed(fromMetersPerSecond: distanceMeters / rideSeconds)
     }
-    // 누적 거리: Apple Health 기준(권한 허용 시), 미인증 시 로컬 기록으로 폴백.
-    // 진행 중 라이딩은 아직 Health 미저장이므로 현재 거리(distanceMeters)를 더해 실시간 표시.
+    // 누적 거리: **Routes(라이딩 기록) 주행거리 총합** 기준(통합 정리로 중복 제거된 목록).
+    // 진행 중 라이딩은 현재 거리(distanceMeters)를 더해 실시간 표시.
     var thisMonthDistance: Double {
         unit.distance(fromMeters: routeBased(store.thisMonthMeters))
     }

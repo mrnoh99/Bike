@@ -25,7 +25,7 @@ struct DashboardView: View {
                 header(layout)
                 grid(layout)
                 controls(layout)
-                bottomBar(layout)
+                gpsBar(layout)
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
             .environment(\.dashboardLayout, layout)
@@ -285,24 +285,21 @@ struct DashboardView: View {
         session.state == .running ? Theme.red : Theme.green
     }
 
-    // GPS(좌) + 개발자 표기(가운데, 한 줄)
-    private func bottomBar(_ layout: DeviceLayout.Dashboard) -> some View {
-        ZStack {
+    // GPS 정확도 표시줄
+    private func gpsBar(_ layout: DeviceLayout.Dashboard) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "antenna.radiowaves.left.and.right")
+                .font(.system(size: layout.footerFont + 1))
+                .foregroundColor(gpsColor)
+            Text("GPS")
+                .font(.system(size: layout.footerFont + 1, weight: .semibold))
+                .foregroundColor(Theme.label)
+            Spacer()
             Text("Developed by JaiSung NOH MD 2026")
                 .font(.system(size: layout.footerFont))
-                .foregroundColor(Theme.label.opacity(0.65))
+                .foregroundColor(Theme.label)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .frame(maxWidth: .infinity)
-            HStack(spacing: 4) {
-                Image(systemName: "antenna.radiowaves.left.and.right")
-                    .font(.system(size: layout.footerFont + 1))
-                    .foregroundColor(gpsColor)
-                Text("GPS")
-                    .font(.system(size: layout.footerFont + 1, weight: .semibold))
-                    .foregroundColor(Theme.label)
-                Spacer(minLength: 0)
-            }
+                .minimumScaleFactor(0.8)
         }
         .padding(.horizontal, layout.headerHPadding)
         .padding(.bottom, 2)
@@ -326,10 +323,11 @@ private extension String {
     var prefix5: String { String(prefix(5)) }
 }
 
+#if DEBUG
 #Preview("iPhone 12 mini") {
-    let session = RideSession.preview
-    return DashboardView()
-        .environmentObject(session)
+    DashboardView()
+        .environmentObject(RideSession.preview)
         .preferredColorScheme(.dark)
         .previewDevice(PreviewDevice(rawValue: "iPhone 12 mini"))
 }
+#endif
