@@ -5,21 +5,26 @@ options:
     iOS: "26.0"
     watchOS: "26.0"
   createIntermediateGroups: true
-  # Xcode 26+: watch 앱은 Watch/ 가 아니라 PlugIns/ 에 임베드해야 한다.
+  # 워치 앱은 iOS 앱 번들의 Watch/ 폴더에 임베드해야 한다("Embed Watch Content",
+  # dstSubfolderSpec=16). PlugIns/ 는 앱 익스텐션 전용이라 워치 앱을 거기 넣으면
+  # iPhone Watch 앱이 워치 콘텐츠로 인식하지 못해 설치가 안 된다.
   postGenCommand: |
-    # Xcode 26: Watch 앱은 PlugIns/ 에 임베드 + CodeSignOnCopy
+    # Watch 임베드: CodeSignOnCopy 보장 + 표준 Watch/ 경로 검증
+    set -e
     sed -i '' \
-      -e 's|dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";|dstPath = "";|' \
-      -e 's|dstSubfolderSpec = 16;|dstSubfolderSpec = 13;|' \
       -e 's|ATTRIBUTES = (RemoveHeadersOnCopy, );|ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, );|' \
       BikeComputer.xcodeproj/project.pbxproj
-    grep -q 'dstSubfolderSpec = 13' BikeComputer.xcodeproj/project.pbxproj \
-      || (echo "error: Watch embed must use PlugIns (dstSubfolderSpec=13)" && exit 1)
-    grep -q 'CodeSignOnCopy' BikeComputer.xcodeproj/project.pbxproj \
-      || (echo "error: Watch embed must use CodeSignOnCopy" && exit 1)
-    grep -q 'SKIP_INSTALL = YES' BikeComputer.xcodeproj/project.pbxproj \
-      || (echo "error: BikeComputerWatch must have SKIP_INSTALL=YES" && exit 1)
-    "${PWD}/scripts/prune_watch_scheme.sh"
+    # 워치 앱은 반드시 iOS 앱의 Watch/ 에 임베드돼야 한다(PlugIns 면 설치 불가).
+    # 단, 워치 컴플리케이션(위젯 익스텐션)은 워치 앱 PlugIns 에 들어가는 게 정상이므로
+    # dstSubfolderSpec=13 자체를 금지하지 않고, Watch/ 임베드 존재만 확인한다.
+    if ! grep -qF 'dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";' BikeComputer.xcodeproj/project.pbxproj; then
+      echo "error: Embed Watch Content(Watch/ 임베드) 단계가 없습니다 — project.yml 의 워치 dependency 확인"
+      exit 1
+    fi
+    if ! grep -q 'CodeSignOnCopy' BikeComputer.xcodeproj/project.pbxproj; then
+      echo "error: Watch embed must use CodeSignOnCopy"
+      exit 1
+    fi
 
 schemes:
   BikeComputer:
@@ -31,8 +36,12 @@ schemes:
       config: Debug
     archive:
       config: Release
-  # Watch 는 BikeComputer(iPhone) 설치 시 PlugIns 에 함께 들어갑니다.
-  # BikeComputerWatch 스킴은 제거 — Watch 단독 Run 시 연동 불가·재설치 시 삭제됨.
+  BikeComputerWatch:
+    build:
+      targets:
+        BikeComputerWatch: all
+    run:
+      config: Debug
 
 settings:
   base:
