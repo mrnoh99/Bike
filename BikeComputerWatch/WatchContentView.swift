@@ -57,11 +57,11 @@ struct WatchContentView: View {
                           color: .fitnessGreen, icon: "arrow.triangle.2.circlepath",
                           light: workout.cadenceSensorConnected)
 
-                // 5) 시작/정지
+                // 5) CONNECT/DISCONNECT (폰으로 데이터 송신 시작/중지)
                 Button {
                     workout.isRunning ? workout.stopWorkout() : workout.startWorkout()
                 } label: {
-                    Text(workout.isRunning ? "정지" : "시작")
+                    Text(workout.isRunning ? "DISCONNECT" : "CONNECT")
                         .font(.system(size: 17, weight: .bold))
                         .frame(maxWidth: .infinity)
                 }
